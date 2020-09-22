@@ -1,0 +1,40 @@
+= `podtime`
+
+== Vision
+
+This is a small tool that prints the amount of time left in all the not-listened-to podcasts in my local https://gpodder.github.io/[gPodder] database.
+
+=== Technical details
+
+The tool is implemented in https://www.haskell.org/[Haskell]. There should be at least some unit tests as applicable.
+
+A quick and dirty proof-of-concept is implemented in shell.
+
+==== `gPodder`
+
+gPodder's default directory is `~/gPodder/` where `Database` is a https://sqlite.org/index.html[SQLite] database with the information about all the added podcasts and episodes.
+
+For a podcast, the tool finds the earliest not-listened-to episode (in the database, `episode.state = 1` (that is https://github.com/gpodder/gpodder/blob/3.10.16/src/gpodder/__init__.py#L155[`DOWNLOADED`]) and `episode.is_new`) and all the newer episodes (by `episode.published`) and extracts their filenames on disk (`episode.download_filename`). The base directory for the podcast is stored in `podcast.download_folder`. This is repeated for every podcast.
+
+To change the gPodder's default directory, you can set the `GPODDER_HOME` environment variable. The tool should support this variable too.
+
+==== MP3 duration
+
+The vast majority of podcasts is distributed as MP3 files, so the tool supports only this format.
+
+The https://unix.stackexchange.com/questions/480375/how-to-find-accumulated-duration-on-several-mp3-with-command-line[basic command] to get the duration is:
+
+----
+$ ffprobe -hide_banner -v warning -select_streams a:0 -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 $FILE
+[mp3 @ 0x7fb1d8003000] Estimating duration from bitrate, this may be inaccurate
+2379.274833
+----
+
+Some files are VBR and don't contain the proper information header, so to get the accurate MP3 duration it's necessary to count every MP3 frame in the file. The warning in the command above indicates this. It's possible to use `ffmpeg` to reencode the file into `null` and get the correct duration, but there is https://stackoverflow.com/questions/8933053/check-duration-of-audio-files-on-the-command-line/46493743#46493743[an easier way]:
+
+----
+$ sox --info -D $FILE
+2382.841995
+----
+
+What's left is to sum up all the durations and present the result in a readable time duration format (`HH:MM:SS`).
