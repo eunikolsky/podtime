@@ -1,5 +1,7 @@
 #!/usr/bin/env sh
 
+set -eu
+
 seconds="$(
     for podid in $( sqlite3 ~/gPodder/Database 'select id from podcast;' )
     do
