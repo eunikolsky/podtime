@@ -10,4 +10,4 @@ seconds="$(
         | bc \
         | cut -d '.' -f1
     )"
-printf '%dd %02d:%02d:%02d\n' $(($seconds/86400)) $(($seconds%86400/3600)) $(($seconds%3600/60)) $(($seconds%60))
+printf '%dd %02d:%02d:%02d\n' $((seconds/86400)) $((seconds%86400/3600)) $((seconds%3600/60)) $((seconds%60))
