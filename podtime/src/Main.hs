@@ -2,7 +2,7 @@
 
 module Main where
 
-import Data.List (intercalate)
+import Data.List (concat, intercalate)
 import Database.SQLite.Simple
 import System.Directory (getHomeDirectory)
 import System.FilePath.Posix ((</>))
@@ -11,8 +11,16 @@ main :: IO ()
 main = do
   podcasts <- getPodcasts
   putStrLn . intercalate ", " . fmap show $ podcasts
-  episodes <- getUnheardEpisodes $ head podcasts
-  putStrLn . intercalate "\n" $ episodes
+
+  allEpisodes <- fmap concat . traverse getUnheardEpisodes $ podcasts
+  putStrLn . intercalate "\n" $ allEpisodes
+
+{-
+ podcasts :: [Int]
+ fmap getUnheardEpisodes podcasts :: [IO [String]]
+ traverse getUnheardEpisodes podcasts :: IO [[String]]
+ fmap join . traverse getUnheardEpisodes $ podcasts :: IO [String]
+ -}
 
 -- | Returns a list of all podcasts in gPodder. Assumes the database
 -- at the default location `~/gPodder/Database`.
