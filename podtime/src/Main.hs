@@ -2,7 +2,7 @@
 
 module Main where
 
-import Data.List (concat, intercalate, isSuffixOf)
+import Data.List (concat, isSuffixOf)
 import Database.SQLite.Simple
 import System.Directory (getHomeDirectory)
 import System.FilePath.Posix ((</>))
@@ -13,12 +13,7 @@ main = do
   homeDir <- getHomeDirectory
   allEpisodes <- withConnection (homeDir ++ "/gPodder/Database") $ \conn -> do
     podcasts <- getPodcasts conn
-    putStrLn . intercalate ", " . fmap show $ podcasts
-
-    allEpisodes <- fmap concat . traverse (getUnheardEpisodes conn) $ podcasts
-    putStrLn . intercalate "\n" $ allEpisodes
-
-    return allEpisodes
+    fmap concat . traverse (getUnheardEpisodes conn) $ podcasts
 
   print =<< (sumPodcastDurations . fmap ((homeDir ++ "/gPodder/Downloads/") ++)) allEpisodes
 
