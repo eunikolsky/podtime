@@ -2,20 +2,25 @@
 
 module Main where
 
-import Data.List (concat, intercalate)
+import Data.List (concat, intercalate, isSuffixOf)
 import Database.SQLite.Simple
 import System.Directory (getHomeDirectory)
 import System.FilePath.Posix ((</>))
+import System.Process (readProcess)
 
 main :: IO ()
 main = do
   homeDir <- getHomeDirectory
-  withConnection (homeDir ++ "/gPodder/Database") $ \conn -> do
+  allEpisodes <- withConnection (homeDir ++ "/gPodder/Database") $ \conn -> do
     podcasts <- getPodcasts conn
     putStrLn . intercalate ", " . fmap show $ podcasts
 
     allEpisodes <- fmap concat . traverse (getUnheardEpisodes conn) $ podcasts
     putStrLn . intercalate "\n" $ allEpisodes
+
+    return allEpisodes
+
+  print =<< (sumPodcastDurations . fmap ((homeDir ++ "/gPodder/Downloads/") ++)) allEpisodes
 
 {-
  podcasts :: [Int]
@@ -31,8 +36,16 @@ getPodcasts conn = do
   return $ fromOnly <$> ids
 
 -- | Returns the filenames of all not-listened-to episodes of the @podcast@ by
--- its id.
+-- its id. Only @.mp3@ files are returned.
 getUnheardEpisodes :: Connection -> Int -> IO [String]
 getUnheardEpisodes conn podcast = do
   r <- queryNamed conn "SELECT p.download_folder, e.download_filename FROM episode e JOIN podcast p ON e.podcast_id = p.id WHERE p.id = :podcast AND e.state = 1 AND e.published >= (SELECT MIN(published) FROM episode WHERE podcast_id = :podcast AND state = 1 AND is_new)" [":podcast" := podcast] :: IO [(String, String)]
-  return $ (\(dir, filename) -> dir </> filename) <$> r
+  let mp3s = filter (\(_, filename) -> ".mp3" `isSuffixOf` filename) r
+  return $ (\(dir, filename) -> dir </> filename) <$> mp3s
+
+-- | Retrieves the durations of the podasts at the @paths@ (using `sox`)
+-- and sums them up.
+sumPodcastDurations :: [String] -> IO Double
+sumPodcastDurations paths = do
+  stdout <- readProcess "sox" (["--info", "-D"] ++ paths) ""
+  return . sum . fmap read . lines $ stdout
