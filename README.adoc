@@ -37,4 +37,6 @@ $ sox --info -D $FILE
 2382.841995
 ----
 
+TIP: You can pass multiple filenames to the `sox` command above and it will print the durations of all of them, which should be faster and use less resources than to create a process for each file.
+
 What's left is to sum up all the durations and present the result in a readable time duration format (`HH:MM:SS`).
