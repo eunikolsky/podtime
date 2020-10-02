@@ -6,7 +6,8 @@ import Data.List (concat, isSuffixOf)
 import Database.SQLite.Simple
 import System.Directory (getHomeDirectory)
 import System.FilePath.Posix ((</>))
-import System.Process (readProcess)
+import System.IO (IOMode(..), withBinaryFile)
+import System.Process (StdStream(..), proc, readCreateProcess, std_err)
 
 main :: IO ()
 main = do
@@ -41,6 +42,12 @@ getUnheardEpisodes conn podcast = do
 -- | Retrieves the durations of the podasts at the @paths@ (using `sox`)
 -- and sums them up.
 sumPodcastDurations :: [String] -> IO Double
-sumPodcastDurations paths = do
-  stdout <- readProcess "sox" (["--info", "-D"] ++ paths) ""
-  return . sum . fmap read . lines $ stdout
+sumPodcastDurations paths =
+  withBinaryFile "/dev/null" WriteMode $ \dev_null -> do
+    stdout <- readCreateProcess (process dev_null) ""
+    return . sum . fmap read . lines $ stdout
+
+  where
+    process dev_null = (proc "sox" (["--info", "-D"] ++ paths)) {
+      std_err = UseHandle dev_null
+    }
