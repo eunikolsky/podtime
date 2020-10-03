@@ -8,6 +8,7 @@ import System.Directory (getHomeDirectory)
 import System.FilePath.Posix ((</>))
 import System.IO (IOMode(..), withBinaryFile)
 import System.Process (StdStream(..), proc, readCreateProcess, std_err)
+import Text.Printf (printf)
 
 main :: IO ()
 main = do
@@ -16,7 +17,7 @@ main = do
     podcasts <- getPodcasts conn
     fmap concat . traverse (getUnheardEpisodes conn) $ podcasts
 
-  print =<< (sumPodcastDurations . fmap ((homeDir ++ "/gPodder/Downloads/") ++)) allEpisodes
+  putStrLn =<< (fmap formatDuration . sumPodcastDurations . fmap ((homeDir ++ "/gPodder/Downloads/") ++)) allEpisodes
 
 {-
  podcasts :: [Int]
@@ -51,3 +52,12 @@ sumPodcastDurations paths =
     process dev_null = (proc "sox" (["--info", "-D"] ++ paths)) {
       std_err = UseHandle dev_null
     }
+
+-- | Formats the duration in seconds to a more human-readable format.
+formatDuration :: Double -> String
+formatDuration duration =
+  let seconds = floor duration :: Integer
+      (days, secondsInDay) = seconds `quotRem` 86400
+      (hours, secondsInHour) = secondsInDay `quotRem` 3600
+      (minutes, secondsInMinute) = secondsInHour `quotRem` 60
+  in printf "%dd %02d:%02d:%02d" days hours minutes secondsInMinute
