@@ -7,17 +7,19 @@ import Database.SQLite.Simple
 import System.Directory (getHomeDirectory)
 import System.FilePath.Posix ((</>))
 import System.IO (IOMode(..), withBinaryFile)
-import System.Process (StdStream(..), proc, readCreateProcess, std_err)
+import System.Process (StdStream(..), cwd, proc, readCreateProcess, std_err)
 import Text.Printf (printf)
 
 main :: IO ()
 main = do
   homeDir <- getHomeDirectory
-  allEpisodes <- withConnection (homeDir ++ "/gPodder/Database") $ \conn -> do
+  let gPodderHome = homeDir </> "gPodder"
+  allEpisodes <- withConnection (gPodderHome </> "Database") $ \conn -> do
     podcasts <- getPodcasts conn
     fmap concat . traverse (getUnheardEpisodes conn) $ podcasts
 
-  putStrLn =<< (fmap formatDuration . sumPodcastDurations . fmap ((homeDir ++ "/gPodder/Downloads/") ++)) allEpisodes
+  duration <- sumPodcastDurations (gPodderHome </> "Downloads") allEpisodes
+  putStrLn . formatDuration $ duration
 
 {-
  podcasts :: [Int]
@@ -41,17 +43,18 @@ getUnheardEpisodes conn podcast = do
   return $ (\(dir, filename) -> dir </> filename) <$> mp3s
 
 -- | Retrieves the durations of the podasts at the @paths@ (using `sox`)
--- and sums them up.
-sumPodcastDurations :: [String] -> IO Double
-sumPodcastDurations paths =
+-- and sums them up. The @paths@ should be relative to @gPodderDownloads@.
+sumPodcastDurations :: FilePath -> [String] -> IO Double
+sumPodcastDurations gPodderDownloads paths =
   withBinaryFile "/dev/null" WriteMode $ \dev_null -> do
-    stdout <- readCreateProcess (process dev_null) ""
+    stdout <- readCreateProcess (sox gPodderDownloads dev_null) ""
     return . sum . fmap read . lines $ stdout
 
   where
-    process dev_null = (proc "sox" (["--info", "-D"] ++ paths)) {
-      std_err = UseHandle dev_null
-    }
+    sox gPodderDownloads dev_null = (proc "sox" (["--info", "-D"] ++ paths))
+      { cwd = Just gPodderDownloads
+      , std_err = UseHandle dev_null
+      }
 
 -- | Formats the duration in seconds to a more human-readable format.
 formatDuration :: Double -> String
