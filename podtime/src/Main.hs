@@ -3,12 +3,13 @@
 module Main where
 
 import Data.List (concat, isSuffixOf)
+import Data.Time.Clock (DiffTime, picosecondsToDiffTime)
+import Data.Time.Format (defaultTimeLocale, formatTime)
 import Database.SQLite.Simple
 import System.Directory (getHomeDirectory)
 import System.FilePath.Posix ((</>))
 import System.IO (IOMode(..), withBinaryFile)
 import System.Process (StdStream(..), cwd, proc, readCreateProcess, std_err)
-import Text.Printf (printf)
 
 main :: IO ()
 main = do
@@ -19,7 +20,7 @@ main = do
     fmap concat . traverse (getUnheardEpisodes conn) $ podcasts
 
   duration <- sumPodcastDurations (gPodderHome </> "Downloads") allEpisodes
-  putStrLn . formatDuration $ duration
+  putStrLn . formatDuration . secondsToDiffTime $ duration
 
 {-
  podcasts :: [Int]
@@ -56,11 +57,12 @@ sumPodcastDurations gPodderDownloads paths =
       , std_err = UseHandle dev_null
       }
 
+-- | Converts the floating-point @duration@ to @DiffTime@.
+-- The standard function in @Data.Time.Clock@ takes an @Integer@.
+secondsToDiffTime :: Double -> DiffTime
+secondsToDiffTime = picosecondsToDiffTime . floor . (* picosecondsInSecond)
+  where picosecondsInSecond = 1e12
+
 -- | Formats the duration in seconds to a more human-readable format.
-formatDuration :: Double -> String
-formatDuration duration =
-  let seconds = floor duration :: Integer
-      (days, secondsInDay) = seconds `quotRem` 86400
-      (hours, secondsInHour) = secondsInDay `quotRem` 3600
-      (minutes, secondsInMinute) = secondsInHour `quotRem` 60
-  in printf "%dd %02d:%02d:%02d" days hours minutes secondsInMinute
+formatDuration :: DiffTime -> String
+formatDuration = formatTime defaultTimeLocale "%dd %02H:%02M:%02S"
