@@ -5,14 +5,27 @@ module Main where
 import Data.List (concat, isSuffixOf)
 import Data.Time.Clock (DiffTime, picosecondsToDiffTime)
 import Data.Time.Format (defaultTimeLocale, formatTime)
+import Data.Version (showVersion)
 import Database.SQLite.Simple
 import System.Directory (getHomeDirectory)
+import System.Environment (getArgs)
 import System.FilePath.Posix ((</>))
 import System.IO (IOMode(..), withBinaryFile)
 import System.Process (StdStream(..), cwd, proc, readCreateProcess, std_err)
 
+import Paths_podtime (version)
+
 main :: IO ()
 main = do
+  args <- getArgs
+  case args of
+    ["-v"] -> putStrLn . showVersion $ version
+    _ -> printTotalDuration
+
+-- | The main function of the program: calculates and prints the total
+-- duration of the unheard episodes.
+printTotalDuration :: IO ()
+printTotalDuration = do
   homeDir <- getHomeDirectory
   let gPodderHome = homeDir </> "gPodder"
   allEpisodes <- withConnection (gPodderHome </> "Database") $ \conn -> do
