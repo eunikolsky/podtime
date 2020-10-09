@@ -2,7 +2,26 @@
 
 == Vision
 
-This is a small tool that prints the amount of time left in all the not-listened-to podcasts in my local https://gpodder.github.io/[gPodder] database.
+This is a tiny tool that prints the amount of time left in all the unheard podcasts in my local https://gpodder.github.io/[gPodder] database. The idea is adapted from a discussion about Overcast in https://atp.fm/388[the ATP episode 388] (around 02:15:20).
+
+I remove most of the heard episodes in gPodder and keep only a small percentage of them. Since the whole purpose of the program is to show me how much behind current episodes I am, unheard episodes are considered all the ones which are newer than the oldest unheard episode (including that one) even if they are not marked as new in gPodder:
+
+----
+Podcast's episodes sorted by descending published date (newer to older):
+
+Episode #7  // downloaded, new
+Episode #6  // downloaded, not new
+Episode #5  // downloaded, not new
+Episode #4  // downloaded, new
+Episode #3  // downloaded, new      // <- this and above are considered unheard
+Episode #2  // downloaded, not new  // <- this and below are old
+Episode #1  // downloaded, not new
+Episode #0  // deleted
+----
+
+Here episodes #3–7 are used because #3 is the oldest downloaded and unheard episode.
+
+In the script, there is no way to distinguish the episodes that I've listened to and saved from the episodes that I haven't heard yet.
 
 === Technical details
 
@@ -14,7 +33,7 @@ A quick and dirty proof-of-concept is implemented in shell.
 
 gPodder's default directory is `~/gPodder/` where `Database` is a https://sqlite.org/index.html[SQLite] database with the information about all the added podcasts and episodes.
 
-For a podcast, the tool finds the earliest not-listened-to episode (in the database, `episode.state = 1` (that is https://github.com/gpodder/gpodder/blob/3.10.16/src/gpodder/__init__.py#L155[`DOWNLOADED`]) and `episode.is_new`) and all the newer episodes (by `episode.published`) and extracts their filenames on disk (`episode.download_filename`). The base directory for the podcast is stored in `podcast.download_folder`. This is repeated for every podcast.
+For a podcast, the tool finds the earliest unheard episode (in the database, `episode.state = 1` (that is https://github.com/gpodder/gpodder/blob/3.10.16/src/gpodder/__init__.py#L155[`DOWNLOADED`]) and `episode.is_new`) and all the newer episodes (by `episode.published`) and extracts their filenames on disk (`episode.download_filename`). The base directory for the podcast is stored in `podcast.download_folder`. This is repeated for every podcast.
 
 To change the gPodder's default directory, you can set the `GPODDER_HOME` environment variable. The tool should support this variable too.
 
