@@ -1,14 +1,13 @@
 name:                podtime
 version:             0.1.0.0
--- synopsis:
--- description:
-homepage:            https://github.com/githubuser/podtime#readme
+synopsis:            A tool that prints the total time of the unheard podcasts in a gPodder database.
+homepage:            https://github.com/eunikolsky/podtime#readme
 license:             BSD3
 license-file:        LICENSE
-author:              Author name here
-maintainer:          example@example.com
-copyright:           2020 Author name here
-category:            Web
+author:              Eugene Nikolsky
+maintainer:          e@egeek.me
+copyright:           2020 Eugene Nikolsky
+category:            Audio
 build-type:          Simple
 cabal-version:       >=1.10
 extra-source-files:  README.md
