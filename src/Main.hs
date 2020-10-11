@@ -2,7 +2,9 @@
 
 module Main where
 
-import Data.List (concat, isSuffixOf)
+import Control.Concurrent (getNumCapabilities)
+import Control.Concurrent.Async (forConcurrently)
+import Data.List (concat, genericLength, isSuffixOf)
 import Data.Time.Clock (DiffTime, picosecondsToDiffTime)
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import Data.Version (showVersion)
@@ -20,20 +22,21 @@ main = do
   args <- getArgs
   case args of
     ["-v"] -> putStrLn . showVersion $ version
-    _ -> printTotalDuration
+    _ -> getNumCapabilities >>= printTotalDuration
 
 -- | The main function of the program: calculates and prints the total
 -- duration of the unheard episodes.
-printTotalDuration :: IO ()
-printTotalDuration = do
+printTotalDuration :: Int -> IO ()
+printTotalDuration caps = do
   homeDir <- getHomeDirectory
   let gPodderHome = homeDir </> "gPodder"
   allEpisodes <- withConnection (gPodderHome </> "Database") $ \conn -> do
     podcasts <- getPodcasts conn
     fmap concat . traverse (getUnheardEpisodes conn) $ podcasts
 
-  duration <- sumPodcastDurations (gPodderHome </> "Downloads") allEpisodes
-  putStrLn . formatDuration . secondsToDiffTime $ duration
+  let episodeGroups = subgroups (ceiling $ genericLength allEpisodes / fromIntegral caps) allEpisodes
+  durations <- forConcurrently episodeGroups $ sumPodcastDurations (gPodderHome </> "Downloads")
+  putStrLn . formatDuration . secondsToDiffTime . sum $ durations
 
 {-
  podcasts :: [Int]
@@ -41,6 +44,14 @@ printTotalDuration = do
  traverse getUnheardEpisodes podcasts :: IO [[String]]
  fmap join . traverse getUnheardEpisodes $ podcasts :: IO [String]
  -}
+
+-- | Splits the list @xs@ into subgroups such that each one contains
+-- @max@ items (the last one may contain fewer items).
+subgroups :: Int -> [a] -> [[a]]
+subgroups _ [] = []
+subgroups max xs =
+  let (group, rest) = splitAt max xs
+  in (group : subgroups max rest)
 
 -- | Returns a list of all podcasts in gPodder.
 getPodcasts :: Connection -> IO [Int]
