@@ -21,11 +21,14 @@ headerStart = string "\xff\xfb"
 
 -- | Parses an MP3 stream.
 mp3Parser :: Parser [Frame]
-mp3Parser = optionalID3 $> headerStart $> [()]
+mp3Parser = do
+  optional id3Parser
+  headerStart $> [()]
+
   where
-    optionalID3 = do
+    id3Parser = do
       void $ string "ID3"
-      void $ many anySingle
+      skipMany anySingle
 
 newtype BitRate = BitRate { unBitRate :: Int }
 newtype SampleRate = SampleRate { unSampleRate :: Int }
