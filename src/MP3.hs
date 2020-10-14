@@ -5,6 +5,7 @@ module MP3 where
 import           Data.Bits
 import qualified Data.ByteString.Lazy as BL
 import           Data.Functor
+import           Data.List (foldl1')
 import           Data.Void
 import           Data.Word
 import           Text.Megaparsec
@@ -51,8 +52,25 @@ mp3Parser = do
 
   where
     id3Parser = do
-      void $ string "ID3"
-      skipMany anySingle
+      string "ID3"
+      (char 0x03 <|> char 0x04) *> char 0x00 <?> "version"
+      char 0x00 <?> "flags"
+      rawSize <- count 4 (satisfy msbIsZero)
+      skipCount (unpackSize rawSize) anySingle
+
+    -- https://id3.org/id3v2.4.0-structure
+    msbIsZero = (< 0x80) -- flip testBit 7
+
+    unpackSize :: [Word8] -> Int
+    unpackSize words =
+      let words32 = fromInteger . toInteger <$> words :: [Word32]
+          shifted =
+            [ words32 !! 0 `shiftL` 21
+            , words32 !! 1 `shiftL` 14
+            , words32 !! 2 `shiftL` 7
+            , words32 !! 3
+            ]
+      in fromIntegral $ foldl1' (.|.) shifted
 
 newtype BitRate = BitRate { unBitRate :: Int }
 newtype SampleRate = SampleRate { unSampleRate :: Int }
