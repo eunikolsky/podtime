@@ -48,7 +48,7 @@ mp3Frame = do
 mp3Parser :: Parser [Frame]
 mp3Parser = do
   optional id3Parser
-  some mp3Frame
+  some mp3Frame <* optional id3v1
 
   where
     id3Parser = do
@@ -57,6 +57,10 @@ mp3Parser = do
       char 0x00 <?> "flags"
       rawSize <- count 4 (satisfy msbIsZero)
       skipCount (unpackSize rawSize) anySingle
+
+    id3v1 = do
+      string "TAG"
+      skipCount (128 - 3) anySingle
 
     -- https://id3.org/id3v2.4.0-structure
     msbIsZero = (< 0x80) -- flip testBit 7
