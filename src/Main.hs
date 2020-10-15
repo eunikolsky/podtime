@@ -2,26 +2,29 @@
 
 module Main where
 
-import Control.Concurrent (getNumCapabilities)
-import Control.Concurrent.Async (forConcurrently)
-import Data.List (concat, genericLength, isSuffixOf)
-import Data.Time.Clock (DiffTime, picosecondsToDiffTime)
-import Data.Time.Format (defaultTimeLocale, formatTime)
-import Data.Version (showVersion)
-import Database.SQLite.Simple
-import System.Directory (getHomeDirectory)
-import System.Environment (getArgs)
-import System.FilePath.Posix ((</>))
-import System.IO (IOMode(..), withBinaryFile)
-import System.Process (StdStream(..), cwd, proc, readCreateProcess, std_err)
+import           Control.Concurrent (getNumCapabilities)
+import           Control.Concurrent.Async (forConcurrently)
+import qualified Data.ByteString.Lazy as BL
+import           Data.List (concat, genericLength, isSuffixOf)
+import           Data.Time.Clock (DiffTime, picosecondsToDiffTime)
+import           Data.Time.Format (defaultTimeLocale, formatTime)
+import           Data.Version (showVersion)
+import           Database.SQLite.Simple
+import           System.Directory (getHomeDirectory)
+import           System.Environment (getArgs)
+import           System.FilePath.Posix ((</>))
+import           System.IO (IOMode(..), withBinaryFile)
+import           System.Process (StdStream(..), cwd, proc, readCreateProcess, std_err)
 
-import Paths_podtime (version)
+import qualified MP3
+import           Paths_podtime (version)
 
 main :: IO ()
 main = do
   args <- getArgs
   case args of
     ["-v"] -> putStrLn . showVersion $ version
+    [file] -> MP3.duration <$> BL.readFile file >>= print
     _ -> getNumCapabilities >>= printTotalDuration
 
 -- | The main function of the program: calculates and prints the total
