@@ -4,7 +4,7 @@ module Main where
 
 import           Control.Concurrent (getNumCapabilities)
 import           Control.Concurrent.Async (forConcurrently)
-import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString as BS
 import           Data.List (concat, genericLength, isSuffixOf)
 import           Data.Time.Clock (DiffTime, picosecondsToDiffTime)
 import           Data.Time.Format (defaultTimeLocale, formatTime)
@@ -24,7 +24,7 @@ main = do
   args <- getArgs
   case args of
     ["-v"] -> putStrLn . showVersion $ version
-    [file] -> MP3.duration <$> BL.readFile file >>= print
+    [file] -> MP3.duration <$> BS.readFile file >>= print
     _ -> getNumCapabilities >>= printTotalDuration
 
 -- | The main function of the program: calculates and prints the total

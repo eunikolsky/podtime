@@ -3,7 +3,7 @@
 module MP3 where
 
 import           Data.Bits
-import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString as BS
 import           Data.Functor
 import           Data.List (foldl1', genericLength)
 import           Data.Void
@@ -11,9 +11,7 @@ import           Data.Word
 import           Text.Megaparsec
 import           Text.Megaparsec.Byte
 
-type Parser = Parsec Void BL.ByteString
-
-type ParserBL = Parser BL.ByteString
+type Parser = Parsec Void BS.ByteString
 
 type Frame = ()
 
@@ -77,7 +75,7 @@ mp3Parser = do
       in fromIntegral $ foldl1' (.|.) shifted
 
 -- | Parses the MP3 data and returns the stream's duration in seconds.
-duration :: BL.ByteString -> Maybe Double
+duration :: BS.ByteString -> Maybe Double
 duration = fmap ((* 0.026) . genericLength) . parseMaybe mp3Parser
 
 newtype BitRate = BitRate { unBitRate :: Int }
