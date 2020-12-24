@@ -4,12 +4,13 @@ module Main where
 
 import Control.Concurrent (getNumCapabilities)
 import Control.Concurrent.Async (forConcurrently)
+import Control.Monad (filterM)
 import Data.List (concat, genericLength, isSuffixOf)
 import Data.Time.Clock (DiffTime, picosecondsToDiffTime)
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import Data.Version (showVersion)
 import Database.SQLite.Simple
-import System.Directory (getHomeDirectory)
+import System.Directory (doesFileExist, getHomeDirectory)
 import System.Environment (getArgs)
 import System.FilePath.Posix ((</>))
 import System.IO (IOMode(..), withBinaryFile)
@@ -68,15 +69,17 @@ getUnheardEpisodes conn podcast = do
   return $ (\(dir, filename) -> dir </> filename) <$> mp3s
 
 -- | Retrieves the durations of the podasts at the @paths@ (using `sox`)
--- and sums them up. The @paths@ should be relative to @gPodderDownloads@.
+-- and sums them up. The @paths@ should be relative to @gPodderDownloads@;
+-- missing files are skipped.
 sumPodcastDurations :: FilePath -> [String] -> IO Double
-sumPodcastDurations gPodderDownloads paths =
+sumPodcastDurations gPodderDownloads paths = do
+  existingPaths <- filterM (doesFileExist . (gPodderDownloads </>)) paths
   withBinaryFile "/dev/null" WriteMode $ \dev_null -> do
-    stdout <- readCreateProcess (sox gPodderDownloads dev_null) ""
+    stdout <- readCreateProcess (sox gPodderDownloads existingPaths dev_null) ""
     return . sum . fmap read . lines $ stdout
 
   where
-    sox gPodderDownloads dev_null = (proc "sox" (["--info", "-D"] ++ paths))
+    sox gPodderDownloads existingPaths dev_null = (proc "sox" (["--info", "-D"] ++ existingPaths))
       { cwd = Just gPodderDownloads
       , std_err = UseHandle dev_null
       }

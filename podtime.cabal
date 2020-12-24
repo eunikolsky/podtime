@@ -1,5 +1,5 @@
 name:                podtime
-version:             0.1.1.0
+version:             0.1.2.0
 synopsis:            A tool that prints the total time of the unheard podcasts in a gPodder database.
 homepage:            https://github.com/eunikolsky/podtime#readme
 license:             BSD3
