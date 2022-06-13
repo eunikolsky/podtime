@@ -46,7 +46,11 @@ mp3Frame = do
 mp3Parser :: Parser [Frame]
 mp3Parser = do
   optional id3Parser
-  some mp3Frame <* optional id3v1
+  frames <- some mp3Frame
+  optional id3v1
+  eof
+
+  pure frames
 
   where
     id3Parser = do
