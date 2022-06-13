@@ -6,6 +6,7 @@ import           Data.Bits
 import qualified Data.ByteString as BS
 import           Data.Functor
 import           Data.List (foldl1', genericLength)
+import           Data.Monoid
 import           Data.Void
 import           Data.Word
 import           Text.Megaparsec
@@ -13,7 +14,8 @@ import           Text.Megaparsec.Byte
 
 type Parser = Parsec Void BS.ByteString
 
-type Frame = ()
+newtype Frame = Frame SampleRate
+
 
 -- | Parses an MP3 frame header, assuming MPEG-1 Layer 3 and
 -- without error protection.
@@ -23,11 +25,12 @@ mp3Frame = do
   details <- anySingle
   void anySingle
 
-  skipCount (restLength details) anySingle
-  return ()
+  let (skipLength, sampleRate) = restLength details
+  skipCount skipLength anySingle
+  return $ Frame sampleRate
 
   where
-    restLength :: Word8 -> Int
+    restLength :: Word8 -> (Int, SampleRate)
     restLength details =
       let br = BitRate . (bitRates !!) . (.&. 0x0f) . (`shiftR` 4) . fromIntegral $ details
           sr = SampleRate . (sampleRates !!) . (.&. 0x03) . (`shiftR` 2) . fromIntegral $ details
@@ -40,7 +43,7 @@ mp3Frame = do
             , 224000, 256000, 320000, undefined
             ]
           sampleRates = [44100, 48000, 32000, undefined]
-      in (frameLen br sr p) - 4
+      in ((frameLen br sr p) - 4, sr)
 
 -- | Parses an MP3 stream.
 mp3Parser :: Parser [Frame]
@@ -80,7 +83,10 @@ mp3Parser = do
 
 -- | Parses the MP3 data and returns the stream's duration in seconds.
 duration :: BS.ByteString -> Maybe Double
-duration = fmap ((* 0.026) . genericLength) . parseMaybe mp3Parser
+duration = fmap (getSum . foldMap (Sum . frameDuration)) . parseMaybe mp3Parser
+  where
+    frameDuration (Frame f) = numSamplesInFrame / fromIntegral (unSampleRate f)
+    numSamplesInFrame = 1152
 
 newtype BitRate = BitRate { unBitRate :: Int }
 newtype SampleRate = SampleRate { unSampleRate :: Int }
