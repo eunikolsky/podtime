@@ -19,7 +19,7 @@ type Frame = ()
 -- without error protection.
 mp3Frame :: Parser Frame
 mp3Frame = do
-  void $ string "\xff\xfb"
+  string "\xff\xfb" <?> "frame start"
   details <- anySingle
   void anySingle
 
@@ -61,7 +61,7 @@ mp3Parser = do
       skipCount (unpackSize rawSize) anySingle
 
     id3v1 = do
-      string "TAG"
+      string "TAG" <?> "ID3v1 start"
       skipCount (128 - 3) anySingle
 
     -- https://id3.org/id3v2.4.0-structure
