@@ -24,7 +24,9 @@ main = do
   args <- getArgs
   case args of
     ["-v"] -> putStrLn . showVersion $ version
-    [file] -> MP3.duration <$> BS.readFile file >>= print
+    [file] -> do
+      d <- MP3.duration <$> BS.readFile file
+      putStrLn $ either id show d
     _ -> getNumCapabilities >>= printTotalDuration
 
 -- | The main function of the program: calculates and prints the total

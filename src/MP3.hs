@@ -2,13 +2,16 @@
 
 module MP3 where
 
+import           Data.Bifunctor (bimap)
 import           Data.Bits
 import qualified Data.ByteString as BS
 import           Data.Functor
 import           Data.List (foldl1', genericLength)
+import qualified Data.List.NonEmpty as NE
 import           Data.Monoid
 import           Data.Void
 import           Data.Word
+import           Numeric (showHex)
 import           Text.Megaparsec
 import           Text.Megaparsec.Byte
 
@@ -16,6 +19,12 @@ type Parser = Parsec Void BS.ByteString
 
 newtype Frame = Frame SampleRate
 
+-- | Returns error text and position
+errorP :: (VisualStream s, ShowErrorComponent e) => ParseErrorBundle s e -> (String, Int)
+errorP e = let
+    pe = NE.head $ bundleErrors e
+    (TrivialError pos _ _) = pe
+  in (parseErrorTextPretty pe, pos)
 
 -- | Parses an MP3 frame header, assuming MPEG-1 Layer 3 and
 -- without error protection.
@@ -82,8 +91,11 @@ mp3Parser = do
       in fromIntegral $ foldl1' (.|.) shifted
 
 -- | Parses the MP3 data and returns the stream's duration in seconds.
-duration :: BS.ByteString -> Maybe Double
-duration = fmap (getSum . foldMap (Sum . frameDuration)) . parseMaybe mp3Parser
+duration :: BS.ByteString -> Either String Double
+duration = bimap
+  ((\(e, pos) -> mconcat [e, " at byte 0x", showHex pos ""]) . errorP)
+  (getSum . foldMap (Sum . frameDuration))
+  . parse mp3Parser ""
   where
     frameDuration (Frame f) = numSamplesInFrame / fromIntegral (unSampleRate f)
     numSamplesInFrame = 1152
