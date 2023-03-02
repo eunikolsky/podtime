@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module MP3 where
 
 import           Data.Bifunctor (bimap)
