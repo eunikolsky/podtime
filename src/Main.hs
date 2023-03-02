@@ -79,7 +79,7 @@ sumPodcastDurations gPodderDownloads paths =
     return . sum . fmap read . lines $ stdout
 
   where
-    sox dev_null = (proc "sox" (["--info", "-D"] ++ paths))
+    sox dev_null = (proc "sox" (["--info", "-D"] <> paths))
       { cwd = Just gPodderDownloads
       , std_err = UseHandle dev_null
       }

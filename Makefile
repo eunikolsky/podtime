@@ -7,4 +7,4 @@ check-build:
 
 .PHONY:
 check-hlint:
-	hlint src
+	hlint -j4 src
