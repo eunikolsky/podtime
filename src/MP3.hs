@@ -6,7 +6,7 @@ import           Data.Bifunctor (bimap)
 import           Data.Bits
 import qualified Data.ByteString as BS
 import           Data.Functor
-import           Data.List (foldl1', genericLength)
+import           Data.List (foldl1')
 import qualified Data.List.NonEmpty as NE
 import           Data.Monoid
 import           Data.Void
@@ -30,7 +30,7 @@ errorP e = let
 -- without error protection.
 mp3Frame :: Parser Frame
 mp3Frame = do
-  string "\xff\xfb" <?> "frame start"
+  _ <- string "\xff\xfb" <?> "frame start"
   details <- anySingle
   void anySingle
 
@@ -57,31 +57,31 @@ mp3Frame = do
 -- | Parses an MP3 stream.
 mp3Parser :: Parser [Frame]
 mp3Parser = do
-  optional id3Parser
+  _ <- optional id3Parser
   frames <- some mp3Frame
-  optional id3v1
+  _ <- optional id3v1
   eof
 
   pure frames
 
   where
     id3Parser = do
-      string "ID3"
-      (char 0x03 <|> char 0x04) *> char 0x00 <?> "version"
-      char 0x00 <?> "flags"
+      _ <- string "ID3"
+      _ <- (char 0x03 <|> char 0x04) *> char 0x00 <?> "version"
+      _ <- char 0x00 <?> "flags"
       rawSize <- count 4 (satisfy msbIsZero)
       skipCount (unpackSize rawSize) anySingle
 
     id3v1 = do
-      string "TAG" <?> "ID3v1 start"
+      _ <- string "TAG" <?> "ID3v1 start"
       skipCount (128 - 3) anySingle
 
     -- https://id3.org/id3v2.4.0-structure
     msbIsZero = (< 0x80) -- flip testBit 7
 
     unpackSize :: [Word8] -> Int
-    unpackSize words =
-      let words32 = fromInteger . toInteger <$> words :: [Word32]
+    unpackSize bytes =
+      let words32 = fromInteger . toInteger <$> bytes :: [Word32]
           shifted =
             [ words32 !! 0 `shiftL` 21
             , words32 !! 1 `shiftL` 14
