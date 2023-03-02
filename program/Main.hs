@@ -1,6 +1,4 @@
-{-# OPTIONS_GHC -Wno-missing-export-lists #-}
-
-module Main where
+module Main (main) where
 
 import           Control.Concurrent (getNumCapabilities)
 import           Control.Concurrent.Async (forConcurrently)
