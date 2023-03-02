@@ -50,7 +50,7 @@ mp3Frame = do
             , 224000, 256000, 320000, undefined
             ]
           sampleRates = [44100, 48000, 32000, undefined]
-      in ((frameLen br sr p) - 4, sr)
+      in (frameLen br sr p - 4, sr)
 
 -- | Parses an MP3 stream.
 mp3Parser :: Parser [Frame]
@@ -81,7 +81,7 @@ mp3Parser = do
     unpackSize bytes =
       let words32 = fromInteger . toInteger <$> bytes :: [Word32]
           shifted =
-            [ words32 !! 0 `shiftL` 21
+            [ head words32 `shiftL` 21
             , words32 !! 1 `shiftL` 14
             , words32 !! 2 `shiftL` 7
             , words32 !! 3

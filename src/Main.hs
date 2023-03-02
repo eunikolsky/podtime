@@ -68,7 +68,7 @@ getUnheardEpisodes :: Connection -> Int -> IO [String]
 getUnheardEpisodes conn podcast = do
   r <- queryNamed conn "SELECT p.download_folder, e.download_filename FROM episode e JOIN podcast p ON e.podcast_id = p.id WHERE p.id = :podcast AND e.state = 1 AND e.published >= (SELECT MIN(published) FROM episode WHERE podcast_id = :podcast AND state = 1 AND is_new)" [":podcast" := podcast] :: IO [(String, String)]
   let mp3s = filter (\(_, filename) -> ".mp3" `isSuffixOf` filename) r
-  return $ (\(dir, filename) -> dir </> filename) <$> mp3s
+  return $ uncurry (</>) <$> mp3s
 
 -- | Retrieves the durations of the podasts at the @paths@ (using `sox`)
 -- and sums them up. The @paths@ should be relative to @gPodderDownloads@.
