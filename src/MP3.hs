@@ -1,4 +1,6 @@
-module MP3 where
+module MP3
+  ( duration
+  ) where
 
 import           Data.Bifunctor (bimap)
 import           Data.Bits
@@ -21,7 +23,9 @@ newtype Frame = Frame SampleRate
 errorP :: (VisualStream s, ShowErrorComponent e) => ParseErrorBundle s e -> (String, Int)
 errorP e = let
     pe = NE.head $ bundleErrors e
-    (TrivialError pos _ _) = pe
+    pos = case pe of
+      TrivialError pos' _ _ -> pos'
+      FancyError pos' _ -> pos'
   in (parseErrorTextPretty pe, pos)
 
 -- | Parses an MP3 frame header, assuming MPEG-1 Layer 3 and
