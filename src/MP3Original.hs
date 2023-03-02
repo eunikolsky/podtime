@@ -1,4 +1,4 @@
-module MP3
+module MP3Original
   ( duration
   ) where
 

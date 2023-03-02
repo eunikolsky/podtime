@@ -16,7 +16,7 @@ import           System.FilePath.Posix ((</>))
 import           System.IO (IOMode(..), withBinaryFile)
 import           System.Process (StdStream(..), cwd, proc, readCreateProcess, std_err)
 
-import qualified MP3
+import qualified MP3Original as MP3
 import           Paths_podtime (version)
 
 main :: IO ()

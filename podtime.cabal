@@ -41,7 +41,7 @@ common common-options
 library
   import:              common-options
   hs-source-dirs:      src
-  exposed-modules:     MP3
+  exposed-modules:     MP3Original
   build-depends:
       bytestring
     , megaparsec
