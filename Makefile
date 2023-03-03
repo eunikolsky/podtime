@@ -21,6 +21,7 @@ testd:
 testfw:
 	@stack test --fast --file-watch
 
+# run like this: `m testfw-seed SEED=1032969830`
 .PHONY:
 testfw-seed:
 	@stack test --fast --file-watch --ta="--seed $${SEED}"
