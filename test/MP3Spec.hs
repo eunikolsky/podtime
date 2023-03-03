@@ -8,7 +8,7 @@ import Test.Hspec
 import Test.Hspec.Attoparsec
 
 spec :: Spec
-spec =
+spec = parallel $ do
   describe "frameParser" $ do
     it "parses a basic 128 kbps frame" $ do
       let frame = mkFrame
