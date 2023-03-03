@@ -5,4 +5,6 @@ module MP3
 import Data.Attoparsec.ByteString
 
 frameParser :: Parser ()
-frameParser = pure ()
+frameParser = do
+  _ <- string "\xff\xfb" <?> "first two header bytes"
+  pure ()
