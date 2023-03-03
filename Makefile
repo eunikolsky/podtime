@@ -12,3 +12,7 @@ check-test:
 .PHONY:
 check-hlint:
 	hlint -j4 src program test
+
+.PHONY:
+testd:
+	@ghcid --command "stack ghci --test --main-is $$( stack ide targets 2>&1 | grep -F :test: ) --ghci-options=-fobject-code" --test "main"
