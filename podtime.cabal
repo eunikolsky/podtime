@@ -17,7 +17,8 @@ common common-options
       base >= 4.7 && < 5
   default-language:    Haskell2010
   default-extensions:
-      OverloadedStrings
+      ImportQualifiedPost
+    , OverloadedStrings
     , TypeApplications
   -- most of the list is copied from summoner
   -- https://github.com/kowainik/summoner/blob/main/summoner-cli/examples/stack-full/stack-full.cabal
@@ -41,9 +42,12 @@ common common-options
 library
   import:              common-options
   hs-source-dirs:      src
-  exposed-modules:     MP3Original
+  exposed-modules:
+      MP3
+    , MP3Original
   build-depends:
-      bytestring
+      attoparsec
+    , bytestring
     , megaparsec
 
 executable podtime
@@ -72,4 +76,7 @@ test-suite podtime-test
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
                        -Wno-missing-export-lists
   build-depends:
-      hspec
+      bytestring
+    , hspec
+    , hspec-attoparsec
+    , podtime
