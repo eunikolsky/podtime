@@ -16,3 +16,11 @@ check-hlint:
 .PHONY:
 testd:
 	@ghcid --command "stack ghci --test --main-is $$( stack ide targets 2>&1 | grep -F :test: ) --ghci-options=-fobject-code" --test "main"
+
+.PHONY:
+testfw:
+	@stack test --fast --file-watch
+
+.PHONY:
+testfw-seed:
+	@stack test --fast --file-watch --ta="--seed $${SEED}"
