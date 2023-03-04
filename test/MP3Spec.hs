@@ -41,16 +41,17 @@ frameSize = 417
 frameHeaderSize = 4
 contentsSize = frameSize - frameHeaderSize
 
+header :: ByteString
+header = BS.pack [0xff, 0b11111011, 0b10010000, 0b11000100]
+
 -- | A standard 128 kb/s, 44.1 kHz mp3 frame.
 mkFrame :: ByteString
 mkFrame = header <> contents
-  where header = BS.pack [0xff, 0b11111011, 0b10010000, 0b11000100]
-        contents = BS.replicate contentsSize 0
+  where contents = BS.replicate contentsSize 0
 
 -- | Generates a standard 128 kb/s, 44.1 kHz mp3 frame with arbitrary contents.
 genFrame :: Gen ByteString
 genFrame = do
-  let header = BS.pack [0xff, 0b11111011, 0b10010000, 0b11000100]
   contents <- vectorOf contentsSize arbitrary
   pure $ header <> BS.pack contents
 
@@ -67,7 +68,6 @@ genInvalidFrame = do
 -- | Generates an incomplete mp3 frame.
 genIncompleteFrame :: Gen ByteString
 genIncompleteFrame = do
-  let header = BS.pack [0xff, 0b11111011, 0b10010000, 0b11000100]
   incompleteLength <- chooseInt (0, contentsSize - 1)
   contents <- vectorOf incompleteLength arbitrary
   pure $ header <> BS.pack contents
