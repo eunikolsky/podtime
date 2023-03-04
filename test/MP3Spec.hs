@@ -1,6 +1,8 @@
 module MP3Spec where
 
 import Control.Monad
+import Data.Attoparsec.ByteString (Parser)
+import Data.Attoparsec.ByteString qualified as A
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Word
@@ -17,7 +19,7 @@ spec = parallel $ do
     describe "examples" $ do
       it "parses a basic 128 kbps frame" $ do
         let frame = mkFrame
-        frameParser `shouldSucceedOn` frame
+        complete frameParser `shouldSucceedOn` frame
 
       it "fails to parse bytes without correct frame sync" $ do
         let frame = mkFrame `replacingHeadWith` 0x00
@@ -26,15 +28,15 @@ spec = parallel $ do
     describe "properties" $ do
       prop "parses a basic 128 kbps frame with any contents"
         . forAll genFrame $ \frame ->
-          frameParser `shouldSucceedOn` frame
+          complete frameParser `shouldSucceedOn` frame
 
       prop "fails to parse bytes with incorrect first byte"
         . forAll genInvalidFrame $ \frame ->
           frameParser `shouldFailOn` frame
 
-      prop "fails to parse incomplete frames"
-        . forAll genIncompleteFrame $ \frame ->
-          frameParser `shouldFailOn` frame
+-- | Parser combinator to make sure the entire input is consumed.
+complete :: Parser a -> Parser a
+complete = (<* A.endOfInput)
 
 frameSize, frameHeaderSize, contentsSize :: Int
 frameSize = 417
@@ -64,13 +66,6 @@ genInvalidFrame = do
   firstByte <- firstM (/= 0xff) $ repeat arbitrary
   frame <- genFrame
   pure $ frame `replacingHeadWith` firstByte
-
--- | Generates an incomplete mp3 frame.
-genIncompleteFrame :: Gen ByteString
-genIncompleteFrame = do
-  incompleteLength <- chooseInt (0, contentsSize - 1)
-  contents <- vectorOf incompleteLength arbitrary
-  pure $ header <> BS.pack contents
 
 firstM :: (Monad m, Show a) => (a -> Bool) -> [m a] -> m a
 firstM pred (x:xs) = do

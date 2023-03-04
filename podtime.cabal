@@ -78,6 +78,7 @@ test-suite podtime-test
                        -Wno-missing-export-lists
   build-depends:
       QuickCheck
+    , attoparsec
     , bytestring
     , hspec
     , hspec-attoparsec
