@@ -3,6 +3,7 @@ module MP3Spec where
 import Control.Monad
 import Data.Attoparsec.ByteString (Parser)
 import Data.Attoparsec.ByteString qualified as A
+import Data.Bits
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Word
@@ -30,6 +31,10 @@ spec = parallel $ do
         . forAll genFrame $ \frame ->
           complete frameParser `shouldSucceedOn` frame
 
+      prop "parses a basic 128 kbps frame with padding bit"
+        . forAll genFrameWithPadding $ \frame ->
+          complete frameParser `shouldSucceedOn` frame
+
       prop "fails to parse bytes with incorrect first byte"
         . forAll genInvalidFrame $ \frame ->
           frameParser `shouldFailOn` frame
@@ -43,8 +48,20 @@ frameSize = 417
 frameHeaderSize = 4
 contentsSize = frameSize - frameHeaderSize
 
+newtype PaddingBit = PaddingBit Bool
+
+mkHeader :: PaddingBit -> ByteString
+mkHeader (PaddingBit paddingBitSet) = BS.pack
+  [ 0xff
+  , 0b11111011
+  , (if paddingBitSet then setBit else clearBit) 0b10010000 paddingBitIndex
+  , 0b11000100
+  ]
+
+  where paddingBitIndex = 1
+
 header :: ByteString
-header = BS.pack [0xff, 0b11111011, 0b10010000, 0b11000100]
+header = mkHeader (PaddingBit False)
 
 -- | A standard 128 kb/s, 44.1 kHz mp3 frame.
 mkFrame :: ByteString
@@ -56,6 +73,13 @@ genFrame :: Gen ByteString
 genFrame = do
   contents <- vectorOf contentsSize arbitrary
   pure $ header <> BS.pack contents
+
+-- | Generates a standard 128 kb/s, 44.1 kHz mp3 frame with padding bit set and
+-- arbitrary contents.
+genFrameWithPadding :: Gen ByteString
+genFrameWithPadding = do
+  contents <- vectorOf (contentsSize + 1) arbitrary
+  pure $ mkHeader (PaddingBit True) <> BS.pack contents
 
 -- | Generates an invalid mp3 frame where the first byte is incorrect.
 genInvalidFrame :: Gen ByteString
