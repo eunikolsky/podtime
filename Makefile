@@ -7,7 +7,7 @@ check-build:
 
 .PHONY:
 check-test:
-	stack --verbosity error test --fast
+	stack --verbosity error test --fast --ta='-f silent'
 
 .PHONY:
 check-hlint:
