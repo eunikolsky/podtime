@@ -47,7 +47,7 @@ spec = parallel $ do
       prop "fails to parse frame with reserved sampling rate"
         . forAll (genFrameWithSamplingRate SRReserved) $ \frame ->
           case frame ~> frameParser of
-            Left err -> err `shouldContain` "Unexpected sampling rate \"reserved\" (11)"
+            Left err -> err `shouldContain` "Unexpected sampling rate \"reserved\" (3)"
             Right parsed -> expectationFailure $ "parsed frame " <> show parsed
 
 -- | Parser combinator to make sure the entire input is consumed.
