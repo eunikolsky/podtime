@@ -35,13 +35,17 @@ spec = parallel $ do
         . forAll genFrameWithPadding $ \frame ->
           complete frameParser `shouldSucceedOn` frame
 
-      forM_ (enumFromTo minBound maxBound) $ \samplingRate ->
+      forM_ [SR44100, SR48000, SR32000] $ \samplingRate ->
         prop ("parses a basic 128 kbps frame with sampling rate " <> show samplingRate) .
           forAll (genFrameWithSamplingRate samplingRate) $ \frame ->
             complete frameParser `shouldSucceedOn` frame
 
       prop "fails to parse bytes with incorrect first byte"
         . forAll genInvalidFrame $ \frame ->
+          frameParser `shouldFailOn` frame
+
+      prop "fails to parse frame with reserved sampling rate"
+        . forAll (genFrameWithSamplingRate SRReserved) $ \frame ->
           frameParser `shouldFailOn` frame
 
 -- | Parser combinator to make sure the entire input is consumed.
@@ -55,13 +59,13 @@ contentsSize = frameSize - frameHeaderSize
 
 newtype PaddingBit = PaddingBit Bool
 
-data SamplingRate = SR44100 | SR48000 | SR32000
-  deriving stock (Bounded, Enum)
+data SamplingRate = SR44100 | SR48000 | SR32000 | SRReserved
 
 instance Show SamplingRate where
   show SR44100 = "44.1 kHz"
   show SR48000 = "48 kHz"
   show SR32000 = "32 kHz"
+  show SRReserved = "<Reserved>"
 
 mkHeader :: PaddingBit -> SamplingRate -> ByteString
 mkHeader (PaddingBit paddingBitSet) sr = BS.pack
@@ -81,9 +85,10 @@ mkHeader (PaddingBit paddingBitSet) sr = BS.pack
 -- | Returns a zeroed frame byte where only the sampling rate bits are set
 -- corresponding to `sr`.
 samplingRateByte :: SamplingRate -> Word8
-samplingRateByte SR44100 = zeroBits
-samplingRateByte SR48000 = 0b00000100
-samplingRateByte SR32000 = 0b00001000
+samplingRateByte SR44100    = zeroBits
+samplingRateByte SR48000    = 0b00000100
+samplingRateByte SR32000    = 0b00001000
+samplingRateByte SRReserved = 0b00001100
 
 header :: ByteString
 header = mkHeader (PaddingBit False) SR44100
@@ -114,8 +119,14 @@ genFrameWithSamplingRate sr = do
         SR44100 -> 417
         SR48000 -> 384
         SR32000 -> 576
-  contents <- vectorOf (contentsSize' - frameHeaderSize) arbitrary
+        SRReserved -> 0
+  contents <- vectorOf (contentsSize' - frameHeaderSize `noLessThan` 0) arbitrary
   pure $ mkHeader (PaddingBit False) sr <> BS.pack contents
+
+-- | Returns the first number if it's >= the second number; otherwise, the second
+-- number. It's a more obvious name for `max`.
+noLessThan :: Ord a => a -> a -> a
+noLessThan = max
 
 -- | Generates an invalid mp3 frame where the first byte is incorrect.
 genInvalidFrame :: Gen ByteString
