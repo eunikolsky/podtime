@@ -30,7 +30,8 @@ samplingRateParser byte = case 0b00000011 .&. shiftR byte 2 of
   0b00 -> pure SR44100Hz
   0b01 -> pure SR48000Hz
   0b10 -> pure SR32000Hz
-  _ -> mzero -- FIXME a better error message?
+  0b11 -> fail "Unexpected sampling rate \"reserved\" (11)"
+  _ -> mzero -- other values are not possible
 
 -- | Returns the frame length based on 128 kb/s bitrate and the provided sample rate.
 frameSize :: SamplingRate -> Int
