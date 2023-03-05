@@ -2,6 +2,7 @@ module MP3
   ( frameParser
   ) where
 
+import Control.Monad
 import Data.Attoparsec.ByteString ((<?>), Parser)
 import Data.Attoparsec.ByteString qualified as A
 import Data.Bits
@@ -13,15 +14,34 @@ frameParser = do
   byte2 <- A.anyWord8
   _ <- A.anyWord8
 
+  bitrate <- bitrateParser byte2
   samplingRate <- samplingRateParser byte2
+
   let paddingSize = if testBit byte2 paddingBitIndex then 1 else 0
-      contentsSize = frameSize samplingRate - 4 + paddingSize
+      contentsSize = frameSize bitrate samplingRate - 4 + paddingSize
 
   _ <- A.take contentsSize
   pure ()
 
 -- | Sampling rate of a frame; it's required to calculate the frame length.
 data SamplingRate = SR32000Hz | SR44100Hz | SR48000Hz
+
+-- | Bitrate of a frame; it's required to calculate the frame length.
+data Bitrate
+  = BR32kbps
+  | BR40kbps
+  | BR48kbps
+  | BR56kbps
+  | BR64kbps
+  | BR80kbps
+  | BR96kbps
+  | BR112kbps
+  | BR128kbps
+  | BR160kbps
+  | BR192kbps
+  | BR224kbps
+  | BR256kbps
+  | BR320kbps
 
 -- | Parses the sample rate from the frame byte.
 samplingRateParser :: Word8 -> Parser SamplingRate
@@ -32,13 +52,47 @@ samplingRateParser byte = case 0b00000011 .&. shiftR byte 2 of
   0b11 -> fail "Unexpected sampling rate \"reserved\" (3)"
   x -> fail $ "Impossible sampling rate value " <> show x
 
+-- | Parses the bitrate from the frame byte.
+bitrateParser :: Word8 -> Parser Bitrate
+bitrateParser byte = case shiftR byte 4 of
+  0b0001 -> pure BR32kbps
+  0b0010 -> pure BR40kbps
+  0b0011 -> pure BR48kbps
+  0b0100 -> pure BR56kbps
+  0b0101 -> pure BR64kbps
+  0b0110 -> pure BR80kbps
+  0b0111 -> pure BR96kbps
+  0b1000 -> pure BR112kbps
+  0b1001 -> pure BR128kbps
+  0b1010 -> pure BR160kbps
+  0b1011 -> pure BR192kbps
+  0b1100 -> pure BR224kbps
+  0b1101 -> pure BR256kbps
+  0b1110 -> pure BR320kbps
+  _ -> mzero -- FIXME more informative error message
+
 -- | Returns the frame length based on 128 kb/s bitrate and the provided sample rate.
-frameSize :: SamplingRate -> Int
-frameSize sr = floor @Float $ 144 * 128000 / samplingRateHz sr
+frameSize :: Bitrate -> SamplingRate -> Int
+frameSize br sr = floor @Float $ 144 * bitrateBitsPerSecond br / samplingRateHz sr
   where
     samplingRateHz SR32000Hz = 32000
     samplingRateHz SR44100Hz = 44100
     samplingRateHz SR48000Hz = 48000
+
+    bitrateBitsPerSecond BR32kbps  = 32000
+    bitrateBitsPerSecond BR40kbps  = 40000
+    bitrateBitsPerSecond BR48kbps  = 48000
+    bitrateBitsPerSecond BR56kbps  = 56000
+    bitrateBitsPerSecond BR64kbps  = 64000
+    bitrateBitsPerSecond BR80kbps  = 80000
+    bitrateBitsPerSecond BR96kbps  = 96000
+    bitrateBitsPerSecond BR112kbps = 112000
+    bitrateBitsPerSecond BR128kbps = 128000
+    bitrateBitsPerSecond BR160kbps = 160000
+    bitrateBitsPerSecond BR192kbps = 192000
+    bitrateBitsPerSecond BR224kbps = 224000
+    bitrateBitsPerSecond BR256kbps = 256000
+    bitrateBitsPerSecond BR320kbps = 320000
 
 -- TODO try https://github.com/stevana/bits-and-bobs
 paddingBitIndex :: Int
