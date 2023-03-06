@@ -7,6 +7,7 @@ import Data.Bits
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Map.Strict qualified as M
+import Data.Maybe
 import Data.Word
 import MP3
 import Prelude hiding (pred)
@@ -67,11 +68,6 @@ spec = parallel $ do
 -- | Parser combinator to make sure the entire input is consumed.
 complete :: Parser a -> Parser a
 complete = (<* A.endOfInput)
-
-frameSize, frameHeaderSize, contentsSize :: Int
-frameSize = 417
-frameHeaderSize = 4
-contentsSize = frameSize - frameHeaderSize
 
 newtype PaddingBit = PaddingBit Bool
 
@@ -167,22 +163,30 @@ bitrateByte = (`shiftL` 4) . byte
 header :: ByteString
 header = mkHeader (PaddingBit False) SR44100 (BRValid VBV128)
 
+frameHeaderSize :: Int
+frameHeaderSize = 4
+
 -- | A standard 128 kb/s, 44.1 kHz mp3 frame.
 mkFrame :: ByteString
 mkFrame = header <> contents
-  where contents = BS.replicate contentsSize 0
+  where
+    contents = BS.replicate contentsSize 0
+    contentsSize = fromJust (frameLength SR44100 $ BRValid VBV128) - frameHeaderSize
 
 -- | Generates an mp3 frame with the given sampling rate, bitrate and padding,
 -- and arbitrary contents.
 genFrame :: SamplingRate -> Bitrate -> PaddingBit -> Gen ByteString
 genFrame sr br padding = do
-  let contentsSize' = paddingSize padding + case (sr, br) of
-        (SRReserved, _) -> 0
-        (_, BRBad) -> 0
-        (_, BRFree) -> 0
-        (_, BRValid vbv) -> frameLengths M.! sr !! fromEnum vbv
-  contents <- vectorOf (contentsSize' - frameHeaderSize `noLessThan` 0) arbitrary
+  let contentsSize = paddingSize padding + fromMaybe 0 (frameLength sr br)
+  contents <- vectorOf (contentsSize - frameHeaderSize `noLessThan` 0) arbitrary
   pure $ mkHeader padding sr br <> BS.pack contents
+
+-- | Returns frame length for the sampling rate and bitrate.
+frameLength :: SamplingRate -> Bitrate -> Maybe Int
+frameLength SRReserved _ = Nothing
+frameLength _ BRBad = Nothing
+frameLength _ BRFree = Nothing
+frameLength sr (BRValid vbv) = Just $ frameLengths M.! sr !! fromEnum vbv
 
 -- | Map from sampling rate to a list of frame lengths, one for each valid
 -- bitrate in the ascending order.
