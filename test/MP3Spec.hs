@@ -1,4 +1,4 @@
-module MP3Spec where
+module MP3Spec (spec) where
 
 import Control.Monad
 import Data.Attoparsec.ByteString (Parser)
