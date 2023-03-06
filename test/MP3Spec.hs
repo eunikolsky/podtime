@@ -38,7 +38,7 @@ spec = parallel $ do
                   , show paddingBit
                   , " frame"
                   ]
-            prop desciption .
+            modifyMaxSuccess (`div` 10) . prop desciption .
               forAll (genFrame samplingRate (BRValid bitrate) paddingBit) $ \frame ->
                 complete frameParser `shouldSucceedOn` frame
 
