@@ -81,6 +81,7 @@ test-suite podtime-test
       QuickCheck
     , attoparsec
     , bytestring
+    , containers
     , hspec
     , hspec-attoparsec
     , podtime
