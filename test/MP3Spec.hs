@@ -88,7 +88,9 @@ instance Show SamplingRate where
 
 -- | Valid bitrate values; they are separate from `Bitrate` in order to generate
 -- successful parsing tests for `[minBound..maxBound]`.
-data ValidBitrateValue = VBV32 | VBV40 | VBV48 | VBV56 | VBV64 | VBV80 | VBV96 | VBV112 | VBV128 | VBV160 | VBV192 | VBV224 | VBV256 | VBV320
+data ValidBitrateValue
+  = VBV32 | VBV40 | VBV48 | VBV56 | VBV64 | VBV80 | VBV96
+  | VBV112 | VBV128 | VBV160 | VBV192 | VBV224 | VBV256 | VBV320
   deriving stock (Bounded, Enum)
 
 data Bitrate = BRValid ValidBitrateValue | BRFree | BRBad
