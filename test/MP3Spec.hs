@@ -6,6 +6,7 @@ import Data.Attoparsec.ByteString qualified as A
 import Data.Bits
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
+import Data.Foldable
 import Data.Map.Strict qualified as M
 import Data.Maybe
 import Data.Word
@@ -122,11 +123,11 @@ mkHeader padding sr br = BS.pack
   ]
 
   where
-    byte2 =
-      (.|. bitrateByte br)
-      . (.|. samplingRateByte sr)
-      . (.|. paddingByte padding)
-      $ zeroBits
+    byte2 = getIor $ foldMap' Ior
+      [ bitrateByte br
+      , samplingRateByte sr
+      , paddingByte padding
+      ]
 
 -- | Returns a zeroed frame byte where only the padding bit is set
 -- corresponding to `Padding`.
