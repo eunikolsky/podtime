@@ -40,7 +40,7 @@ spec = parallel $ do
           forAll (genFrameWithSamplingRate samplingRate) $ \frame ->
             complete frameParser `shouldSucceedOn` frame
 
-      forM_ (enumFromTo minBound maxBound) $ \bitrate ->
+      forM_ [minBound..maxBound] $ \bitrate ->
         prop ("parses a " <> show bitrate <> " frame") .
           forAll (genFrameWithBitrate $ BRValid bitrate) $ \frame ->
             complete frameParser `shouldSucceedOn` frame
