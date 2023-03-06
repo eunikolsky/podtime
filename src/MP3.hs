@@ -2,7 +2,6 @@ module MP3
   ( frameParser
   ) where
 
-import Control.Monad
 import Data.Attoparsec.ByteString ((<?>), Parser)
 import Data.Attoparsec.ByteString qualified as A
 import Data.Bits
@@ -71,7 +70,7 @@ bitrateParser byte = case shiftR byte 4 of
   0b1110 -> pure BR320kbps
   0b0000 -> fail "Unexpected bitrate \"free\" (0)"
   0b1111 -> fail "Unexpected bitrate \"bad\" (15)"
-  _ -> mzero -- FIXME more informative error message
+  x -> fail $ "Impossible bitrate value " <> show x
 
 -- | Returns the frame length based on 128 kb/s bitrate and the provided sample rate.
 frameSize :: Bitrate -> SamplingRate -> Int
