@@ -145,24 +145,22 @@ samplingRateByte SRReserved = 0b00001100
 -- | Returns a zeroed frame byte where only the bitrate bits are set
 -- corresponding to `Bitrate`.
 bitrateByte :: Bitrate -> Word8
-bitrateByte = (`shiftL` 4) . byte
-  where
-    byte (BRValid VBV32)  = 0b0001
-    byte (BRValid VBV40)  = 0b0010
-    byte (BRValid VBV48)  = 0b0011
-    byte (BRValid VBV56)  = 0b0100
-    byte (BRValid VBV64)  = 0b0101
-    byte (BRValid VBV80)  = 0b0110
-    byte (BRValid VBV96)  = 0b0111
-    byte (BRValid VBV112) = 0b1000
-    byte (BRValid VBV128) = 0b1001
-    byte (BRValid VBV160) = 0b1010
-    byte (BRValid VBV192) = 0b1011
-    byte (BRValid VBV224) = 0b1100
-    byte (BRValid VBV256) = 0b1101
-    byte (BRValid VBV320) = 0b1110
-    byte BRFree           = 0b0000
-    byte BRBad            = 0b1111
+bitrateByte (BRValid VBV32)  = 0b00010000
+bitrateByte (BRValid VBV40)  = 0b00100000
+bitrateByte (BRValid VBV48)  = 0b00110000
+bitrateByte (BRValid VBV56)  = 0b01000000
+bitrateByte (BRValid VBV64)  = 0b01010000
+bitrateByte (BRValid VBV80)  = 0b01100000
+bitrateByte (BRValid VBV96)  = 0b01110000
+bitrateByte (BRValid VBV112) = 0b10000000
+bitrateByte (BRValid VBV128) = 0b10010000
+bitrateByte (BRValid VBV160) = 0b10100000
+bitrateByte (BRValid VBV192) = 0b10110000
+bitrateByte (BRValid VBV224) = 0b11000000
+bitrateByte (BRValid VBV256) = 0b11010000
+bitrateByte (BRValid VBV320) = 0b11100000
+bitrateByte BRFree           = 0b00000000
+bitrateByte BRBad            = 0b11110000
 
 -- | A standard 128 kb/s, 44.1 kHz mp3 frame header.
 header :: ByteString
