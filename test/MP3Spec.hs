@@ -29,18 +29,18 @@ spec = parallel $ do
         frameParser `shouldFailOn` frame
 
     describe "properties" $ do
-      forM_ [PaddingBit False, PaddingBit True] $ \paddingBit ->
+      forM_ [NoPadding, Padding] $ \padding ->
         forM_ [SR44100, SR48000, SR32000] $ \samplingRate ->
           forM_ [minBound..maxBound] $ \bitrate -> do
             let desciption = mconcat
                   [ "parses a "
                   , show bitrate, ", "
                   , show samplingRate, ", "
-                  , show paddingBit
+                  , show padding
                   , " frame"
                   ]
             modifyMaxSuccess (`div` 10) . prop desciption .
-              forAll (genFrame samplingRate (BRValid bitrate) paddingBit) $ \frame ->
+              forAll (genFrame samplingRate (BRValid bitrate) padding) $ \frame ->
                 complete frameParser `shouldSucceedOn` frame
 
       prop "fails to parse bytes with incorrect first byte"
@@ -48,19 +48,19 @@ spec = parallel $ do
           frameParser `shouldFailOn` frame
 
       prop "fails to parse frame with reserved sampling rate"
-        . forAll (genFrame SRReserved (BRValid VBV128) (PaddingBit False)) $ \frame ->
+        . forAll (genFrame SRReserved (BRValid VBV128) NoPadding) $ \frame ->
           case frame ~> frameParser of
             Left err -> err `shouldContain` "Unexpected sampling rate \"reserved\" (3)"
             Right parsed -> expectationFailure $ "parsed frame " <> show parsed
 
       prop "fails to parse frame with free bitrate"
-        . forAll (genFrame SR44100 BRFree (PaddingBit False)) $ \frame ->
+        . forAll (genFrame SR44100 BRFree NoPadding) $ \frame ->
           case frame ~> frameParser of
             Left err -> err `shouldContain` "Unexpected bitrate \"free\" (0)"
             Right parsed -> expectationFailure $ "parsed frame " <> show parsed
 
       prop "fails to parse frame with bad bitrate"
-        . forAll (genFrame SR44100 BRBad (PaddingBit False)) $ \frame ->
+        . forAll (genFrame SR44100 BRBad NoPadding) $ \frame ->
           case frame ~> frameParser of
             Left err -> err `shouldContain` "Unexpected bitrate \"bad\" (15)"
             Right parsed -> expectationFailure $ "parsed frame " <> show parsed
@@ -69,15 +69,15 @@ spec = parallel $ do
 complete :: Parser a -> Parser a
 complete = (<* A.endOfInput)
 
-newtype PaddingBit = PaddingBit Bool
+data Padding = Padding | NoPadding
 
-instance Show PaddingBit where
-  show (PaddingBit False) = "padding off"
-  show (PaddingBit True) = "padding on"
+instance Show Padding where
+  show NoPadding = "padding off"
+  show Padding = "padding on"
 
-paddingSize :: PaddingBit -> Int
-paddingSize (PaddingBit False) = 0
-paddingSize (PaddingBit True) = 1
+paddingSize :: Padding -> Int
+paddingSize NoPadding = 0
+paddingSize Padding = 1
 
 data SamplingRate = SR44100 | SR48000 | SR32000 | SRReserved
   deriving stock (Eq, Ord)
@@ -113,8 +113,8 @@ instance Show ValidBitrateValue where
   show VBV256 = "256 kb/s"
   show VBV320 = "320 kb/s"
 
-mkHeader :: PaddingBit -> SamplingRate -> Bitrate -> ByteString
-mkHeader (PaddingBit paddingBitSet) sr br = BS.pack
+mkHeader :: Padding -> SamplingRate -> Bitrate -> ByteString
+mkHeader padding sr br = BS.pack
   [ 0xff
   , 0b11111011
   , byte2
@@ -122,12 +122,17 @@ mkHeader (PaddingBit paddingBitSet) sr br = BS.pack
   ]
 
   where
-    paddingBitIndex = 1
     byte2 =
       (.|. bitrateByte br)
       . (.|. samplingRateByte sr)
-      . flip (if paddingBitSet then setBit else clearBit) paddingBitIndex
+      . (.|. paddingByte padding)
       $ zeroBits
+
+-- | Returns a zeroed frame byte where only the padding bit is set
+-- corresponding to `Padding`.
+paddingByte :: Padding -> Word8
+paddingByte NoPadding = zeroBits
+paddingByte Padding   = 0b00000010
 
 -- | Returns a zeroed frame byte where only the sampling rate bits are set
 -- corresponding to `SamplingRate`.
@@ -161,7 +166,7 @@ bitrateByte = (`shiftL` 4) . byte
 
 -- | A standard 128 kb/s, 44.1 kHz mp3 frame header.
 header :: ByteString
-header = mkHeader (PaddingBit False) SR44100 (BRValid VBV128)
+header = mkHeader NoPadding SR44100 (BRValid VBV128)
 
 frameHeaderSize :: Int
 frameHeaderSize = 4
@@ -175,7 +180,7 @@ mkFrame = header <> contents
 
 -- | Generates an mp3 frame with the given sampling rate, bitrate and padding,
 -- and arbitrary contents.
-genFrame :: SamplingRate -> Bitrate -> PaddingBit -> Gen ByteString
+genFrame :: SamplingRate -> Bitrate -> Padding -> Gen ByteString
 genFrame sr br padding = do
   let contentsSize = paddingSize padding + fromMaybe 0 (frameLength sr br)
   contents <- vectorOf (contentsSize - frameHeaderSize `noLessThan` 0) arbitrary
@@ -209,7 +214,7 @@ genInvalidFrame = do
   -- the first `0xff` byte (seed 181316514)
 
   firstByte <- firstM (/= 0xff) $ repeat arbitrary
-  frame <- genFrame SR44100 (BRValid VBV128) (PaddingBit False)
+  frame <- genFrame SR44100 (BRValid VBV128) NoPadding
   pure $ frame `replacingHeadWith` firstByte
 
 firstM :: (Monad m, Show a) => (a -> Bool) -> [m a] -> m a
