@@ -69,6 +69,8 @@ bitrateParser byte = case shiftR byte 4 of
   0b1100 -> pure BR224kbps
   0b1101 -> pure BR256kbps
   0b1110 -> pure BR320kbps
+  0b0000 -> fail "Unexpected bitrate \"free\" (0)"
+  0b1111 -> fail "Unexpected bitrate \"bad\" (15)"
   _ -> mzero -- FIXME more informative error message
 
 -- | Returns the frame length based on 128 kb/s bitrate and the provided sample rate.
