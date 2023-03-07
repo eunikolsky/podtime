@@ -29,6 +29,10 @@ spec = parallel $ do
         let frame = mkFrame `replacingHeadWith` 0x00
         frameParser `shouldFailOn` frame
 
+      it "fails to parse MPEG version 2.5 frames" $ do
+        let header = mkMPEGHeader MPEG25 NoPadding SR44100 (BRValid VBV128)
+        frameParser `shouldFailOn` header
+
     describe "properties" $ do
       forM_ [NoPadding, Padding] $ \padding ->
         forM_ [SR44100, SR48000, SR32000] $ \samplingRate ->
@@ -114,20 +118,34 @@ instance Show ValidBitrateValue where
   show VBV256 = "256 kb/s"
   show VBV320 = "320 kb/s"
 
-mkHeader :: Padding -> SamplingRate -> Bitrate -> ByteString
-mkHeader padding sr br = BS.pack
+data MPEGVersion = MPEG1 | MPEG25
+
+-- | Returns data for an MPEG header with the given settings.
+mkMPEGHeader :: MPEGVersion -> Padding -> SamplingRate -> Bitrate -> ByteString
+mkMPEGHeader mpeg padding sr br = BS.pack
   [ 0xff
-  , 0b11111011
+  , byte1
   , byte2
   , 0b11000100
   ]
 
   where
+    byte1 = mpegVersionByte mpeg .|. 0b11100011
     byte2 = getIor $ foldMap' Ior
       [ bitrateByte br
       , samplingRateByte sr
       , paddingByte padding
       ]
+
+-- | Returns data for MP3 header with the given settings.
+mkHeader :: Padding -> SamplingRate -> Bitrate -> ByteString
+mkHeader = mkMPEGHeader MPEG1
+
+-- | Returns a zeroed frame byte where only the MPEG version bits are set
+-- corresponding to `MPEGVersion`.
+mpegVersionByte :: MPEGVersion -> Word8
+mpegVersionByte MPEG1  = 0b00011000
+mpegVersionByte MPEG25 = 0b00000000
 
 -- | Returns a zeroed frame byte where only the padding bit is set
 -- corresponding to `Padding`.
@@ -164,15 +182,15 @@ bitrateByte BRFree           = 0b00000000
 bitrateByte BRBad            = 0b11110000
 
 -- | A standard 128 kb/s, 44.1 kHz mp3 frame header.
-header :: ByteString
-header = mkHeader NoPadding SR44100 (BRValid VBV128)
+standardMP3Header :: ByteString
+standardMP3Header = mkHeader NoPadding SR44100 (BRValid VBV128)
 
 frameHeaderSize :: Int
 frameHeaderSize = 4
 
 -- | A standard 128 kb/s, 44.1 kHz mp3 frame.
 mkFrame :: ByteString
-mkFrame = header <> contents
+mkFrame = standardMP3Header <> contents
   where
     contents = BS.replicate contentsSize 0
     contentsSize = fromJust (frameLength SR44100 $ BRValid VBV128) - frameHeaderSize
