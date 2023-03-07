@@ -31,7 +31,9 @@ spec = parallel $ do
 
       it "fails to parse MPEG version 2.5 frames" $ do
         let header = mkMPEGHeader MPEG25 NoPadding SR44100 (BRValid VBV128)
-        frameParser `shouldFailOn` header
+        case header ~> frameParser of
+          Left err -> err `shouldContain` "Unexpected MPEG version 2.5 (0) frame"
+          Right parsed -> expectationFailure $ "parsed frame " <> show parsed
 
     describe "properties" $ do
       forM_ [NoPadding, Padding] $ \padding ->
