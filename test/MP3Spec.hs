@@ -25,7 +25,7 @@ spec = parallel $ do
         let frame = mkFrame
         complete frameParser `shouldSucceedOn` frame
 
-      it "fails to parse bytes without correct frame sync" $ do
+      it "fails to parse bytes without correct frame sync first byte" $ do
         let frame = mkFrame `replacingHeadWith` 0x00
         frameParser `shouldFailOn` frame
 
@@ -229,18 +229,10 @@ noLessThan = max
 -- | Generates an invalid mp3 frame where the first byte is incorrect.
 genInvalidFrame :: Gen ByteString
 genInvalidFrame = do
-  -- `firstByte <- arbitrary; when (firstByte == 0xff) discard` didn't discard
-  -- the first `0xff` byte (seed 181316514)
-
-  firstByte <- firstM (/= 0xff) $ repeat arbitrary
+  -- `chooseBoundedIntegral` is faster than `choose`
+  firstByte <- chooseBoundedIntegral (0, 0xff - 1)
   frame <- genFrame SR44100 (BRValid VBV128) NoPadding
   pure $ frame `replacingHeadWith` firstByte
-
-firstM :: (Monad m, Show a) => (a -> Bool) -> [m a] -> m a
-firstM pred (x:xs) = do
-  x' <- x
-  if pred x' then pure x' else firstM pred xs
-firstM _ [] = error "Unexpected empty xs in firstM"
 
 replacingHeadWith :: ByteString -> Word8 -> ByteString
 replacingHeadWith bs n = BS.singleton n <> BS.tail bs
