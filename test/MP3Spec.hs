@@ -27,9 +27,7 @@ spec = parallel $ do
 
       it "fails to parse MPEG version 2.5 frames" $ do
         let header = mkMPEGHeader validFrameSync MPEG25 NoPadding SR44100 (BRValid VBV128)
-        case header ~> frameParser of
-          Left err -> err `shouldContain` "Unexpected MPEG version 2.5 (0) frame"
-          Right parsed -> expectationFailure $ "parsed frame " <> show parsed
+        header ~> frameParser `shouldFailWithErrorContaining` "Unexpected MPEG version 2.5 (0) frame"
 
     describe "properties" $ do
       forM_ [NoPadding, Padding] $ \padding ->
@@ -48,27 +46,26 @@ spec = parallel $ do
 
       prop "fails to parse bytes with invalid frame sync"
         . forAll genHeaderWithInvalidFrameSync $ \header ->
-          case header ~> frameParser of
-            Left err -> err `shouldContain` "Invalid frame sync"
-            Right parsed -> expectationFailure $ "parsed frame " <> show parsed
+          header ~> frameParser `shouldFailWithErrorContaining` "Invalid frame sync"
 
       prop "fails to parse frame with reserved sampling rate"
         . forAll (genFrame SRReserved (BRValid VBV128) NoPadding) $ \frame ->
-          case frame ~> frameParser of
-            Left err -> err `shouldContain` "Unexpected sampling rate \"reserved\" (3)"
-            Right parsed -> expectationFailure $ "parsed frame " <> show parsed
+          frame ~> frameParser `shouldFailWithErrorContaining` "Unexpected sampling rate \"reserved\" (3)"
 
       prop "fails to parse frame with free bitrate"
         . forAll (genFrame SR44100 BRFree NoPadding) $ \frame ->
-          case frame ~> frameParser of
-            Left err -> err `shouldContain` "Unexpected bitrate \"free\" (0)"
-            Right parsed -> expectationFailure $ "parsed frame " <> show parsed
+          frame ~> frameParser `shouldFailWithErrorContaining` "Unexpected bitrate \"free\" (0)"
 
       prop "fails to parse frame with bad bitrate"
         . forAll (genFrame SR44100 BRBad NoPadding) $ \frame ->
-          case frame ~> frameParser of
-            Left err -> err `shouldContain` "Unexpected bitrate \"bad\" (15)"
-            Right parsed -> expectationFailure $ "parsed frame " <> show parsed
+          frame ~> frameParser `shouldFailWithErrorContaining` "Unexpected bitrate \"bad\" (15)"
+
+-- | Checks that parsing result is a failure containing the given string.
+--
+-- > input ~> parser `shouldFailWithErrorContaining` "foo"
+shouldFailWithErrorContaining :: Show a => Either String a -> String -> Expectation
+Left err `shouldFailWithErrorContaining` expected = err `shouldContain` expected
+Right parsed `shouldFailWithErrorContaining` _ = expectationFailure $ "Unexpectedly parsed " <> show parsed
 
 -- | Parser combinator to make sure the entire input is consumed.
 complete :: Parser a -> Parser a
