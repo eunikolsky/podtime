@@ -17,7 +17,7 @@ frameParser = do
   byte2 <- A.anyWord8
   _ <- A.anyWord8
 
-  mpegVersionParser byte1
+  mpegVersionValidator byte1
   bitrate <- bitrateParser byte2
   samplingRate <- samplingRateParser byte2
 
@@ -27,9 +27,11 @@ frameParser = do
   _ <- A.take contentsSize
   pure ()
 
--- | Verifies that the header byte declares MPEG Version 1; otherwise, fails.
-mpegVersionParser :: Word8 -> Parser ()
-mpegVersionParser byte = case 0b00000011 .&. byte `shiftR` 3 of
+-- | Validates that the header byte declares MPEG Version 1.
+-- It's called a validator because it returns unit (or error) since we don't
+-- care about MPEG Version after this if it's valid.
+mpegVersionValidator :: Word8 -> Parser ()
+mpegVersionValidator byte = case 0b00000011 .&. byte `shiftR` 3 of
   0b11 -> pure ()
   0b00 -> fail "Unexpected MPEG version 2.5 (0) frame"
   _ -> fail ""
