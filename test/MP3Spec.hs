@@ -28,15 +28,15 @@ spec = parallel $ do
         complete frameParser `shouldSucceedOn` frame
 
       it "fails to parse MPEG version 2 frames" $ do
-        let header = mkMPEGHeader validFrameSync MPEG2 NoPadding SR44100 (BRValid VBV128)
+        let header = mkMPEGHeader validFrameSync MPEG2 (MP3FrameSettings (BRValid VBV128) SR44100 NoPadding)
         header ~> frameParser `shouldFailWithErrorContaining` "Unexpected MPEG version 2 (2) frame"
 
       it "fails to parse MPEG version 2.5 frames" $ do
-        let header = mkMPEGHeader validFrameSync MPEG25 NoPadding SR44100 (BRValid VBV128)
+        let header = mkMPEGHeader validFrameSync MPEG25 (MP3FrameSettings (BRValid VBV128) SR44100 NoPadding)
         header ~> frameParser `shouldFailWithErrorContaining` "Unexpected MPEG version 2.5 (0) frame"
 
       it "fails to parse MPEG version reserved frames" $ do
-        let header = mkMPEGHeader validFrameSync MPEGReserved NoPadding SR44100 (BRValid VBV128)
+        let header = mkMPEGHeader validFrameSync MPEGReserved (MP3FrameSettings (BRValid VBV128) SR44100 NoPadding)
         header ~> frameParser `shouldFailWithErrorContaining` "Unexpected MPEG version \"reserved\" (1) frame"
 
     describe "properties" $ do
@@ -51,7 +51,7 @@ spec = parallel $ do
                   , " frame"
                   ]
             modifyMaxSuccess (`div` 10) . prop desciption .
-              forAll (genFrame samplingRate (BRValid bitrate) padding) $ \frame ->
+              forAll (genFrame $ MP3FrameSettings (BRValid bitrate) samplingRate padding) $ \frame ->
                 complete frameParser `shouldSucceedOn` frame
 
       prop "fails to parse bytes with invalid frame sync"
@@ -59,15 +59,15 @@ spec = parallel $ do
           header ~> frameParser `shouldFailWithErrorContaining` "Invalid frame sync"
 
       prop "fails to parse frame with reserved sampling rate"
-        . forAll (genFrame SRReserved (BRValid VBV128) NoPadding) $ \frame ->
+        . forAll (genFrame $ MP3FrameSettings (BRValid VBV128) SRReserved NoPadding) $ \frame ->
           frame ~> frameParser `shouldFailWithErrorContaining` "Unexpected sampling rate \"reserved\" (3)"
 
       prop "fails to parse frame with free bitrate"
-        . forAll (genFrame SR44100 BRFree NoPadding) $ \frame ->
+        . forAll (genFrame $ MP3FrameSettings BRFree SR44100 NoPadding) $ \frame ->
           frame ~> frameParser `shouldFailWithErrorContaining` "Unexpected bitrate \"free\" (0)"
 
       prop "fails to parse frame with bad bitrate"
-        . forAll (genFrame SR44100 BRBad NoPadding) $ \frame ->
+        . forAll (genFrame $ MP3FrameSettings BRBad SR44100 NoPadding) $ \frame ->
           frame ~> frameParser `shouldFailWithErrorContaining` "Unexpected bitrate \"bad\" (15)"
 
 -- | Checks that parsing result is a failure containing the given string.
@@ -88,9 +88,9 @@ paddingSize Padding = 1
 data MPEGVersion = MPEG1 | MPEG2 | MPEG25 | MPEGReserved
 
 -- | Returns data for an MPEG header with the given settings.
-mkMPEGHeader :: FrameSync -> MPEGVersion -> Padding -> SamplingRate -> Bitrate -> ByteString
+mkMPEGHeader :: FrameSync -> MPEGVersion -> MP3FrameSettings -> ByteString
 -- TODO use Data.Binary.Put ?
-mkMPEGHeader frameSync mpeg padding sr br = BS.pack
+mkMPEGHeader frameSync mpeg mp3Settings = BS.pack
   [ byte0
   , byte1
   , byte2
@@ -101,13 +101,13 @@ mkMPEGHeader frameSync mpeg padding sr br = BS.pack
     (byte0, initialByte1) = frameSyncBytes frameSync
     byte1 = mpegVersionByte mpeg .|. 0b011 .|. initialByte1
     byte2 = getIor $ foldMap' Ior
-      [ bitrateByte br
-      , samplingRateByte sr
-      , paddingByte padding
+      [ bitrateByte $ mfBitrate mp3Settings
+      , samplingRateByte $ mfSamplingRate mp3Settings
+      , paddingByte $ mfPadding mp3Settings
       ]
 
 -- | Returns data for MP3 header with the given settings.
-mkHeader :: Padding -> SamplingRate -> Bitrate -> ByteString
+mkHeader :: MP3FrameSettings -> ByteString
 mkHeader = mkMPEGHeader validFrameSync MPEG1
 
 -- | Returns a zeroed frame byte where only the MPEG version bits are set
@@ -120,7 +120,7 @@ mpegVersionByte MPEGReserved = 0b00001000
 
 -- | A standard 128 kb/s, 44.1 kHz mp3 frame header.
 standardMP3Header :: ByteString
-standardMP3Header = mkHeader NoPadding SR44100 (BRValid VBV128)
+standardMP3Header = mkHeader (MP3FrameSettings (BRValid VBV128) SR44100 NoPadding)
 
 frameHeaderSize :: Int
 frameHeaderSize = 4
@@ -134,11 +134,11 @@ mkFrame = standardMP3Header <> contents
 
 -- | Generates an mp3 frame with the given sampling rate, bitrate and padding,
 -- and arbitrary contents.
-genFrame :: SamplingRate -> Bitrate -> Padding -> Gen ByteString
-genFrame sr br padding = do
+genFrame :: MP3FrameSettings -> Gen ByteString
+genFrame mp3Settings@(MP3FrameSettings br sr padding) = do
   let contentsSize = paddingSize padding + fromMaybe 0 (frameLength sr br)
   contents <- vectorOf (contentsSize - frameHeaderSize `noLessThan` 0) arbitrary
-  pure $ mkHeader padding sr br <> BS.pack contents
+  pure $ mkHeader mp3Settings <> BS.pack contents
 
 -- | Returns frame length for the sampling rate and bitrate.
 frameLength :: SamplingRate -> Bitrate -> Maybe Int
@@ -166,4 +166,4 @@ genHeaderWithInvalidFrameSync :: Gen ByteString
 genHeaderWithInvalidFrameSync = do
   -- `chooseBoundedIntegral` is faster than `choose`
   frameSync <- chooseBoundedIntegral (0, 0b1111_1111_111 - 1)
-  pure $ mkMPEGHeader (mkFrameSync frameSync) MPEG1 NoPadding SR44100 (BRValid VBV128)
+  pure . mkMPEGHeader (mkFrameSync frameSync) MPEG1 $ MP3FrameSettings (BRValid VBV128) SR44100 NoPadding

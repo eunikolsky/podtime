@@ -1,5 +1,6 @@
 module Domain.MP3HeaderTypes
   ( Bitrate(..)
+  , MP3FrameSettings(..)
   , Padding(..)
   , SamplingRate(..)
   , ValidBitrateValue(..)
@@ -10,6 +11,13 @@ module Domain.MP3HeaderTypes
 
 import Data.Bits
 import Data.Word
+
+-- | MP3 frame header's settings which define the frame length (in bytes).
+data MP3FrameSettings = MP3FrameSettings
+  { mfBitrate :: !Bitrate
+  , mfSamplingRate :: !SamplingRate
+  , mfPadding :: !Padding
+  }
 
 data Padding = Padding | NoPadding
 
