@@ -2,22 +2,19 @@ module MP3
   ( frameParser
   ) where
 
-import Data.Attoparsec.ByteString ((<?>), Parser)
+import Control.Monad
+import Data.Attoparsec.ByteString (Parser)
 import Data.Attoparsec.ByteString qualified as A
 import Data.Bits
 import Data.Word
 
 frameParser :: Parser ()
 frameParser = do
-  let frameSyncByte1Mask = 0b1110_0000
-  -- TODO read four bytes at once?
-  _ <- A.word8 0xff <?> "Invalid frame sync"
-  -- FIXME duplicate label
-  byte1 <- A.satisfy ((== frameSyncByte1Mask) . (.&. frameSyncByte1Mask)) <?> "Invalid frame sync"
-  byte2 <- A.anyWord8
-  _ <- A.anyWord8
+  [byte0, byte1, byte2, _] <- A.count 4 A.anyWord8
 
+  frameSyncValidator (byte0, byte1)
   mpegVersionValidator byte1
+
   bitrate <- bitrateParser byte2
   samplingRate <- samplingRateParser byte2
 
@@ -27,9 +24,16 @@ frameParser = do
   _ <- A.take contentsSize
   pure ()
 
--- | Validates that the header byte declares MPEG Version 1.
+-- | Validates that the header bytes contain the valid frame sync.
 -- It's called a validator because it returns unit (or error) since we don't
 -- care about MPEG Version after this if it's valid.
+frameSyncValidator :: (Word8, Word8) -> Parser ()
+frameSyncValidator (b0, b1) =
+  let isValid = (b0 == 0xff) && (b1 .&. byte1Mask == byte1Mask)
+  in unless isValid . fail . mconcat $ ["Invalid frame sync (", show b0, ", ", show b1, ")"]
+  where byte1Mask = 0b1110_0000
+
+-- | Validates that the header byte declares MPEG Version 1.
 mpegVersionValidator :: Word8 -> Parser ()
 mpegVersionValidator byte = case 0b00000011 .&. byte `shiftR` 3 of
   0b11 -> pure ()
