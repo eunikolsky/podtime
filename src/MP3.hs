@@ -9,9 +9,11 @@ import Data.Word
 
 frameParser :: Parser ()
 frameParser = do
+  let frameSyncByte1Mask = 0b1110_0000
   -- TODO read four bytes at once?
-  _ <- A.word8 0xff <?> "first header byte"
-  byte1 <- A.anyWord8
+  _ <- A.word8 0xff <?> "Invalid frame sync"
+  -- FIXME duplicate label
+  byte1 <- A.satisfy ((== frameSyncByte1Mask) . (.&. frameSyncByte1Mask)) <?> "Invalid frame sync"
   byte2 <- A.anyWord8
   _ <- A.anyWord8
 

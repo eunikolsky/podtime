@@ -15,7 +15,7 @@ import Prelude hiding (pred)
 import Test.Hspec
 import Test.Hspec.Attoparsec
 import Test.Hspec.QuickCheck
-import Test.QuickCheck
+import Test.QuickCheck hiding ((.&.))
 
 spec :: Spec
 spec = parallel $ do
@@ -25,12 +25,8 @@ spec = parallel $ do
         let frame = mkFrame
         complete frameParser `shouldSucceedOn` frame
 
-      it "fails to parse bytes without correct frame sync first byte" $ do
-        let frame = mkFrame `replacingHeadWith` 0x00
-        frameParser `shouldFailOn` frame
-
       it "fails to parse MPEG version 2.5 frames" $ do
-        let header = mkMPEGHeader MPEG25 NoPadding SR44100 (BRValid VBV128)
+        let header = mkMPEGHeader validFrameSync MPEG25 NoPadding SR44100 (BRValid VBV128)
         case header ~> frameParser of
           Left err -> err `shouldContain` "Unexpected MPEG version 2.5 (0) frame"
           Right parsed -> expectationFailure $ "parsed frame " <> show parsed
@@ -50,9 +46,11 @@ spec = parallel $ do
               forAll (genFrame samplingRate (BRValid bitrate) padding) $ \frame ->
                 complete frameParser `shouldSucceedOn` frame
 
-      prop "fails to parse bytes with incorrect first byte"
-        . forAll genInvalidFrame $ \frame ->
-          frameParser `shouldFailOn` frame
+      prop "fails to parse bytes with invalid frame sync"
+        . forAll genHeaderWithInvalidFrameSync $ \header ->
+          case header ~> frameParser of
+            Left err -> err `shouldContain` "Invalid frame sync"
+            Right parsed -> expectationFailure $ "parsed frame " <> show parsed
 
       prop "fails to parse frame with reserved sampling rate"
         . forAll (genFrame SRReserved (BRValid VBV128) NoPadding) $ \frame ->
@@ -122,17 +120,33 @@ instance Show ValidBitrateValue where
 
 data MPEGVersion = MPEG1 | MPEG25
 
+newtype FrameSync = FrameSync Word16
+
+-- | Creates a `FrameSync` from 11 LSBs of the `Word16`.
+mkFrameSync :: Word16 -> FrameSync
+-- this always clears the 5 LSBs in the result
+mkFrameSync = FrameSync . flip shiftL 5
+
+validFrameSync :: FrameSync
+validFrameSync = mkFrameSync 0b1111_1111_111
+
+-- | Returns two zeroed frame bytes where only the frame sync bits are set
+-- corresponding to `FrameSync`.
+frameSyncBytes :: FrameSync -> (Word8, Word8)
+frameSyncBytes (FrameSync w16) = (fromIntegral $ w16 `shiftR` 8, fromIntegral w16)
+
 -- | Returns data for an MPEG header with the given settings.
-mkMPEGHeader :: MPEGVersion -> Padding -> SamplingRate -> Bitrate -> ByteString
-mkMPEGHeader mpeg padding sr br = BS.pack
-  [ 0xff
+mkMPEGHeader :: FrameSync -> MPEGVersion -> Padding -> SamplingRate -> Bitrate -> ByteString
+mkMPEGHeader frameSync mpeg padding sr br = BS.pack
+  [ byte0
   , byte1
   , byte2
   , 0b11000100
   ]
 
   where
-    byte1 = mpegVersionByte mpeg .|. 0b11100011
+    (byte0, initialByte1) = frameSyncBytes frameSync
+    byte1 = mpegVersionByte mpeg .|. 0b011 .|. initialByte1
     byte2 = getIor $ foldMap' Ior
       [ bitrateByte br
       , samplingRateByte sr
@@ -141,7 +155,7 @@ mkMPEGHeader mpeg padding sr br = BS.pack
 
 -- | Returns data for MP3 header with the given settings.
 mkHeader :: Padding -> SamplingRate -> Bitrate -> ByteString
-mkHeader = mkMPEGHeader MPEG1
+mkHeader = mkMPEGHeader validFrameSync MPEG1
 
 -- | Returns a zeroed frame byte where only the MPEG version bits are set
 -- corresponding to `MPEGVersion`.
@@ -226,13 +240,9 @@ frameLengths = M.fromList
 noLessThan :: Ord a => a -> a -> a
 noLessThan = max
 
--- | Generates an invalid mp3 frame where the first byte is incorrect.
-genInvalidFrame :: Gen ByteString
-genInvalidFrame = do
+-- | Generates an mp3 frame header where the frame sync is invalid (11 MSBs are not ones).
+genHeaderWithInvalidFrameSync :: Gen ByteString
+genHeaderWithInvalidFrameSync = do
   -- `chooseBoundedIntegral` is faster than `choose`
-  firstByte <- chooseBoundedIntegral (0, 0xff - 1)
-  frame <- genFrame SR44100 (BRValid VBV128) NoPadding
-  pure $ frame `replacingHeadWith` firstByte
-
-replacingHeadWith :: ByteString -> Word8 -> ByteString
-replacingHeadWith bs n = BS.singleton n <> BS.tail bs
+  frameSync <- chooseBoundedIntegral (0, 0b1111_1111_111 - 1)
+  pure $ mkMPEGHeader (mkFrameSync frameSync) MPEG1 NoPadding SR44100 (BRValid VBV128)

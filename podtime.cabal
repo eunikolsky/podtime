@@ -20,6 +20,7 @@ common common-options
       BinaryLiterals
     , DerivingStrategies
     , ImportQualifiedPost
+    , NumericUnderscores
     , OverloadedStrings
     , TypeApplications
   -- most of the list is copied from summoner
