@@ -25,9 +25,17 @@ spec = parallel $ do
         let frame = mkFrame
         complete frameParser `shouldSucceedOn` frame
 
+      it "fails to parse MPEG version 2 frames" $ do
+        let header = mkMPEGHeader validFrameSync MPEG2 NoPadding SR44100 (BRValid VBV128)
+        header ~> frameParser `shouldFailWithErrorContaining` "Unexpected MPEG version 2 (2) frame"
+
       it "fails to parse MPEG version 2.5 frames" $ do
         let header = mkMPEGHeader validFrameSync MPEG25 NoPadding SR44100 (BRValid VBV128)
         header ~> frameParser `shouldFailWithErrorContaining` "Unexpected MPEG version 2.5 (0) frame"
+
+      it "fails to parse MPEG version reserved frames" $ do
+        let header = mkMPEGHeader validFrameSync MPEGReserved NoPadding SR44100 (BRValid VBV128)
+        header ~> frameParser `shouldFailWithErrorContaining` "Unexpected MPEG version \"reserved\" (1) frame"
 
     describe "properties" $ do
       forM_ [NoPadding, Padding] $ \padding ->
@@ -115,7 +123,7 @@ instance Show ValidBitrateValue where
   show VBV256 = "256 kb/s"
   show VBV320 = "320 kb/s"
 
-data MPEGVersion = MPEG1 | MPEG25
+data MPEGVersion = MPEG1 | MPEG2 | MPEG25 | MPEGReserved
 
 newtype FrameSync = FrameSync Word16
 
@@ -157,8 +165,10 @@ mkHeader = mkMPEGHeader validFrameSync MPEG1
 -- | Returns a zeroed frame byte where only the MPEG version bits are set
 -- corresponding to `MPEGVersion`.
 mpegVersionByte :: MPEGVersion -> Word8
-mpegVersionByte MPEG1  = 0b00011000
-mpegVersionByte MPEG25 = 0b00000000
+mpegVersionByte MPEG1        = 0b00011000
+mpegVersionByte MPEG2        = 0b00010000
+mpegVersionByte MPEG25       = 0b00000000
+mpegVersionByte MPEGReserved = 0b00001000
 
 -- | Returns a zeroed frame byte where only the padding bit is set
 -- corresponding to `Padding`.
