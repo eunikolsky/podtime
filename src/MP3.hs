@@ -14,6 +14,7 @@ frameParser = do
 
   frameSyncValidator (byte0, byte1)
   mpegVersionValidator byte1
+  layerValidator byte1
 
   bitrate <- bitrateParser byte2
   samplingRate <- samplingRateParser byte2
@@ -41,6 +42,15 @@ mpegVersionValidator byte = case 0b00000011 .&. byte `shiftR` 3 of
   0b00 -> fail "Unexpected MPEG version 2.5 (0) frame"
   0b01 -> fail "Unexpected MPEG version \"reserved\" (1) frame"
   x -> fail $ "Impossible MPEG version value " <> show x
+
+-- | Validates that the header byte declares Layer 3.
+layerValidator :: Word8 -> Parser ()
+layerValidator byte = case 0b0000_0011 .&. byte `shiftR` 1 of
+  0b01 -> pure ()
+  0b11 -> fail "Unexpected Layer 1 (3) frame"
+  0b10 -> fail "Unexpected Layer 2 (2) frame"
+  0b00 -> fail "Unexpected Layer \"reserved\" (0) frame"
+  x -> fail $ "Impossible Layer value " <> show x
 
 -- | Sampling rate of a frame; it's required to calculate the frame length.
 data SamplingRate = SR32000Hz | SR44100Hz | SR48000Hz

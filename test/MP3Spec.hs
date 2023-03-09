@@ -39,6 +39,21 @@ spec = parallel $ do
         let header = mkMPEGHeader validFrameSync $ MPEGOther MPEGReserved Layer3
         header ~> frameParser `shouldFailWithErrorContaining` "Unexpected MPEG version \"reserved\" (1) frame"
 
+      -- FIXME combination with mpeg versions
+      it "fails to parse MPEG Layer 1 frames" $ do
+        let header = mkMPEGHeader validFrameSync $ MPEGOther MPEG1 Layer1
+        header ~> frameParser `shouldFailWithErrorContaining` "Unexpected Layer 1 (3) frame"
+
+      -- FIXME combination with mpeg versions
+      it "fails to parse MPEG Layer 2 frames" $ do
+        let header = mkMPEGHeader validFrameSync $ MPEGOther MPEG1 Layer2
+        header ~> frameParser `shouldFailWithErrorContaining` "Unexpected Layer 2 (2) frame"
+
+      -- FIXME combination with mpeg versions
+      it "fails to parse MPEG Layer reserved frames" $ do
+        let header = mkMPEGHeader validFrameSync $ MPEGOther MPEG1 LayerReserved
+        header ~> frameParser `shouldFailWithErrorContaining` "Unexpected Layer \"reserved\" (0) frame"
+
       it "fails to parse frame with reserved sampling rate" $ do
         let header = mkHeader $ MP3FrameSettings (BRValid VBV128) SRReserved NoPadding
         header ~> frameParser `shouldFailWithErrorContaining` "Unexpected sampling rate \"reserved\" (3)"
@@ -87,13 +102,17 @@ paddingSize Padding = 1
 
 data MPEGVersion = MPEG1 | MPEG2 | MPEG25 | MPEGReserved
 
-data Layer = Layer3
+data Layer = Layer1 | Layer2 | Layer3 | LayerReserved
 
 data MPEGSettings = MP3 !MP3FrameSettings | MPEGOther !MPEGVersion !Layer
 
 mpegVersion :: MPEGSettings -> MPEGVersion
 mpegVersion (MP3 _) = MPEG1
 mpegVersion (MPEGOther v _) = v
+
+mpegLayer :: MPEGSettings -> Layer
+mpegLayer (MP3 _) = Layer3
+mpegLayer (MPEGOther _ l) = l
 
 -- | Returns data for an MPEG header with the given settings.
 mkMPEGHeader :: FrameSync -> MPEGSettings -> ByteString
@@ -107,7 +126,8 @@ mkMPEGHeader frameSync mpeg = BS.pack
 
   where
     (byte0, initialByte1) = frameSyncBytes frameSync
-    byte1 = mpegVersionByte (mpegVersion mpeg) .|. 0b011 .|. initialByte1
+    -- FIXME dedup with a fold
+    byte1 = mpegVersionByte (mpegVersion mpeg) .|. layerByte (mpegLayer mpeg) .|. 0b1 .|. initialByte1
     byte2 = case mpeg of
       MP3 mp3Settings ->
         getIor $ foldMap' Ior
@@ -128,6 +148,14 @@ mpegVersionByte MPEG1        = 0b00011000
 mpegVersionByte MPEG2        = 0b00010000
 mpegVersionByte MPEG25       = 0b00000000
 mpegVersionByte MPEGReserved = 0b00001000
+
+-- | Returns a zeroed frame byte where only the Layer number bits are set
+-- corresponding to `Layer`.
+layerByte :: Layer -> Word8
+layerByte Layer1        = 0b110
+layerByte Layer2        = 0b100
+layerByte Layer3        = 0b010
+layerByte LayerReserved = 0b000
 
 -- | A standard 128 kb/s, 44.1 kHz mp3 frame header.
 standardMP3Header :: ByteString
