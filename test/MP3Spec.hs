@@ -28,15 +28,15 @@ spec = parallel $ do
         complete frameParser `shouldSucceedOn` frame
 
       it "fails to parse MPEG version 2 frames" $ do
-        let header = mkMPEGHeader validFrameSync MPEG2
+        let header = mkMPEGHeader validFrameSync $ MPEGOther MPEG2 Layer3
         header ~> frameParser `shouldFailWithErrorContaining` "Unexpected MPEG version 2 (2) frame"
 
       it "fails to parse MPEG version 2.5 frames" $ do
-        let header = mkMPEGHeader validFrameSync MPEG25
+        let header = mkMPEGHeader validFrameSync $ MPEGOther MPEG25 Layer3
         header ~> frameParser `shouldFailWithErrorContaining` "Unexpected MPEG version 2.5 (0) frame"
 
       it "fails to parse MPEG version reserved frames" $ do
-        let header = mkMPEGHeader validFrameSync MPEGReserved
+        let header = mkMPEGHeader validFrameSync $ MPEGOther MPEGReserved Layer3
         header ~> frameParser `shouldFailWithErrorContaining` "Unexpected MPEG version \"reserved\" (1) frame"
 
       it "fails to parse frame with reserved sampling rate" $ do
@@ -85,10 +85,18 @@ paddingSize :: Padding -> Int
 paddingSize NoPadding = 0
 paddingSize Padding = 1
 
-data MPEGVersion = MPEG1 !MP3FrameSettings | MPEG2 | MPEG25 | MPEGReserved
+data MPEGVersion = MPEG1 | MPEG2 | MPEG25 | MPEGReserved
+
+data Layer = Layer3
+
+data MPEGSettings = MP3 !MP3FrameSettings | MPEGOther !MPEGVersion !Layer
+
+mpegVersion :: MPEGSettings -> MPEGVersion
+mpegVersion (MP3 _) = MPEG1
+mpegVersion (MPEGOther v _) = v
 
 -- | Returns data for an MPEG header with the given settings.
-mkMPEGHeader :: FrameSync -> MPEGVersion -> ByteString
+mkMPEGHeader :: FrameSync -> MPEGSettings -> ByteString
 -- TODO use Data.Binary.Put ?
 mkMPEGHeader frameSync mpeg = BS.pack
   [ byte0
@@ -99,9 +107,9 @@ mkMPEGHeader frameSync mpeg = BS.pack
 
   where
     (byte0, initialByte1) = frameSyncBytes frameSync
-    byte1 = mpegVersionByte mpeg .|. 0b011 .|. initialByte1
+    byte1 = mpegVersionByte (mpegVersion mpeg) .|. 0b011 .|. initialByte1
     byte2 = case mpeg of
-      MPEG1 mp3Settings ->
+      MP3 mp3Settings ->
         getIor $ foldMap' Ior
           [ bitrateByte $ mfBitrate mp3Settings
           , samplingRateByte $ mfSamplingRate mp3Settings
@@ -111,12 +119,12 @@ mkMPEGHeader frameSync mpeg = BS.pack
 
 -- | Returns data for MP3 header with the given settings.
 mkHeader :: MP3FrameSettings -> ByteString
-mkHeader = mkMPEGHeader validFrameSync . MPEG1
+mkHeader = mkMPEGHeader validFrameSync . MP3
 
 -- | Returns a zeroed frame byte where only the MPEG version bits are set
 -- corresponding to `MPEGVersion`.
 mpegVersionByte :: MPEGVersion -> Word8
-mpegVersionByte (MPEG1 _)    = 0b00011000
+mpegVersionByte MPEG1        = 0b00011000
 mpegVersionByte MPEG2        = 0b00010000
 mpegVersionByte MPEG25       = 0b00000000
 mpegVersionByte MPEGReserved = 0b00001000
@@ -169,4 +177,4 @@ genHeaderWithInvalidFrameSync :: Gen ByteString
 genHeaderWithInvalidFrameSync = do
   -- `chooseBoundedIntegral` is faster than `choose`
   frameSync <- chooseBoundedIntegral (0, 0b1111_1111_111 - 1)
-  pure . mkMPEGHeader (mkFrameSync frameSync) . MPEG1 $ MP3FrameSettings (BRValid VBV128) SR44100 NoPadding
+  pure . mkMPEGHeader (mkFrameSync frameSync) . MP3 $ MP3FrameSettings (BRValid VBV128) SR44100 NoPadding
