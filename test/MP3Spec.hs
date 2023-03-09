@@ -188,22 +188,23 @@ mkFrame :: ByteString
 mkFrame = standardMP3Header <> contents
   where
     contents = BS.replicate contentsSize 0
-    contentsSize = fromJust (frameLength SR44100 $ BRValid VBV128) - frameHeaderSize
+    contentsSize = fromJust (frameLength $ MP3FrameSettings (BRValid VBV128) SR44100 NoPadding) - frameHeaderSize
 
 -- | Generates an mp3 frame with the given sampling rate, bitrate and padding,
 -- and arbitrary contents.
 genFrame :: MP3FrameSettings -> Gen ByteString
-genFrame mp3Settings@(MP3FrameSettings br sr padding) = do
-  let contentsSize = paddingSize padding + fromMaybe 0 (frameLength sr br)
+genFrame mp3Settings = do
+  let contentsSize = fromMaybe 0 $ frameLength mp3Settings
   contents <- vectorOf (contentsSize - frameHeaderSize `noLessThan` 0) arbitrary
   pure $ mkHeader mp3Settings <> BS.pack contents
 
--- | Returns frame length for the sampling rate and bitrate.
-frameLength :: SamplingRate -> Bitrate -> Maybe Int
-frameLength SRReserved _ = Nothing
-frameLength _ BRBad = Nothing
-frameLength _ BRFree = Nothing
-frameLength sr (BRValid vbv) = Just $ frameLengths M.! sr !! fromEnum vbv
+-- | Returns frame length for the `MP3FrameSettings`.
+frameLength :: MP3FrameSettings -> Maybe Int
+frameLength (MP3FrameSettings _ SRReserved _) = Nothing
+frameLength (MP3FrameSettings BRBad _ _) = Nothing
+frameLength (MP3FrameSettings BRFree _ _) = Nothing
+frameLength (MP3FrameSettings (BRValid vbv) sr padding) = Just $
+  paddingSize padding + frameLengths M.! sr !! fromEnum vbv
 
 -- | Map from sampling rate to a list of frame lengths, one for each valid
 -- bitrate in the ascending order.
