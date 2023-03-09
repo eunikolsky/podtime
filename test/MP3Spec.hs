@@ -126,8 +126,12 @@ mkMPEGHeader frameSync mpeg = BS.pack
 
   where
     (byte0, initialByte1) = frameSyncBytes frameSync
-    -- FIXME dedup with a fold
-    byte1 = mpegVersionByte (mpegVersion mpeg) .|. layerByte (mpegLayer mpeg) .|. 0b1 .|. initialByte1
+    byte1 = getIor $ foldMap' Ior
+      [ mpegVersionByte (mpegVersion mpeg)
+      , layerByte (mpegLayer mpeg)
+      , initialByte1
+      , 0b1
+      ]
     byte2 = case mpeg of
       MP3 mp3Settings ->
         getIor $ foldMap' Ior
