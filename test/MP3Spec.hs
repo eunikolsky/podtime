@@ -126,11 +126,12 @@ mkMPEGHeader frameSync mpeg = BS.pack
 
   where
     (byte0, initialByte1) = frameSyncBytes frameSync
+    noProtection = 0b1
     byte1 = getIor $ foldMap' Ior
       [ mpegVersionByte (mpegVersion mpeg)
       , layerByte (mpegLayer mpeg)
       , initialByte1
-      , 0b1
+      , noProtection
       ]
     byte2 = case mpeg of
       MP3 mp3Settings ->
