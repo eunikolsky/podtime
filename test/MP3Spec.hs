@@ -46,32 +46,26 @@ spec = parallel $ do
         let frame = mkFrame
         complete frameParser `shouldSucceedOn` frame
 
-      it "fails to parse MPEG version 2 frames" $ do
-        let header = mkMPEGHeader validFrameSync $ MPEGOther MPEG2 Layer3
-        header ~> frameParser `shouldFailWithErrorContaining` "Unexpected MPEG version 2 (2) frame"
+      forM_ [ (MPEG2, "2 (2)")
+            , (MPEG25, "2.5 (0)")
+            , (MPEGReserved, "\"reserved\" (1)")
+            ] $ \(version, versionDesc) ->
+        forM_ [minBound..maxBound] $ \layer -> do
+          let settings = MPEGOther version layer
+          it ("fails to parse " <> show settings <> " frames") $ do
+            let header = mkMPEGHeader validFrameSync settings
+            header ~> frameParser `shouldFailWithErrorContaining`
+              ("Unexpected MPEG version " <> versionDesc <> " frame")
 
-      it "fails to parse MPEG version 2.5 frames" $ do
-        let header = mkMPEGHeader validFrameSync $ MPEGOther MPEG25 Layer3
-        header ~> frameParser `shouldFailWithErrorContaining` "Unexpected MPEG version 2.5 (0) frame"
-
-      it "fails to parse MPEG version reserved frames" $ do
-        let header = mkMPEGHeader validFrameSync $ MPEGOther MPEGReserved Layer3
-        header ~> frameParser `shouldFailWithErrorContaining` "Unexpected MPEG version \"reserved\" (1) frame"
-
-      -- FIXME combination with mpeg versions
-      it "fails to parse MPEG Layer 1 frames" $ do
-        let header = mkMPEGHeader validFrameSync $ MPEGOther MPEG1 Layer1
-        header ~> frameParser `shouldFailWithErrorContaining` "Unexpected Layer 1 (3) frame"
-
-      -- FIXME combination with mpeg versions
-      it "fails to parse MPEG Layer 2 frames" $ do
-        let header = mkMPEGHeader validFrameSync $ MPEGOther MPEG1 Layer2
-        header ~> frameParser `shouldFailWithErrorContaining` "Unexpected Layer 2 (2) frame"
-
-      -- FIXME combination with mpeg versions
-      it "fails to parse MPEG Layer reserved frames" $ do
-        let header = mkMPEGHeader validFrameSync $ MPEGOther MPEG1 LayerReserved
-        header ~> frameParser `shouldFailWithErrorContaining` "Unexpected Layer \"reserved\" (0) frame"
+      forM_ [ (Layer1, "1 (3)")
+            , (Layer2, "2 (2)")
+            , (LayerReserved, "\"reserved\" (0)")
+            ] $ \(layer, layerDesc) -> do
+        let settings = MPEGOther MPEG1 layer
+        it ("fails to parse " <> show settings <> " frames") $ do
+          let header = mkMPEGHeader validFrameSync settings
+          header ~> frameParser `shouldFailWithErrorContaining`
+            ("Unexpected Layer " <> layerDesc <> " frame")
 
       it "fails to parse frame with reserved sampling rate" $ do
         let header = mkHeader $ MP3FrameSettings (BRValid VBV128) SRReserved NoPadding
@@ -102,9 +96,26 @@ paddingSize Padding = 1
 
 data MPEGVersion = MPEG1 | MPEG2 | MPEG25 | MPEGReserved
 
+instance Show MPEGVersion where
+  show MPEG1 = "MPEG Version 1"
+  show MPEG2 = "MPEG Version 2"
+  show MPEG25 = "MPEG Version 2.5"
+  show MPEGReserved = "MPEG Version <reserved>"
+
 data Layer = Layer1 | Layer2 | Layer3 | LayerReserved
+  deriving stock (Bounded, Enum)
+
+instance Show Layer where
+  show Layer1 = "Layer I"
+  show Layer2 = "Layer II"
+  show Layer3 = "Layer III"
+  show LayerReserved = "Layer <reserved>"
 
 data MPEGSettings = MP3 !MP3FrameSettings | MPEGOther !MPEGVersion !Layer
+
+instance Show MPEGSettings where
+  show (MP3 _) = "MP3"
+  show (MPEGOther v l) = mconcat [show v, ", ", show l]
 
 mpegVersion :: MPEGSettings -> MPEGVersion
 mpegVersion (MP3 _) = MPEG1
