@@ -127,20 +127,23 @@ mkMPEGHeader frameSync mpeg = BS.pack
   where
     (byte0, initialByte1) = frameSyncBytes frameSync
     noProtection = 0b1
-    byte1 = getIor $ foldMap' Ior
+    byte1 = orBytes
       [ mpegVersionByte (mpegVersion mpeg)
       , layerByte (mpegLayer mpeg)
       , initialByte1
       , noProtection
       ]
     byte2 = case mpeg of
-      MP3 mp3Settings ->
-        getIor $ foldMap' Ior
-          [ bitrateByte $ mfBitrate mp3Settings
-          , samplingRateByte $ mfSamplingRate mp3Settings
-          , paddingByte $ mfPadding mp3Settings
-          ]
+      MP3 mp3Settings -> orBytes
+        [ bitrateByte $ mfBitrate mp3Settings
+        , samplingRateByte $ mfSamplingRate mp3Settings
+        , paddingByte $ mfPadding mp3Settings
+        ]
       _ -> 0
+
+-- | `OR`s all the bytes in the container.
+orBytes :: (Bits a, Foldable t) => t a -> a
+orBytes = getIor . foldMap' Ior
 
 -- | Returns data for MP3 header with the given settings.
 mkHeader :: MP3FrameSettings -> ByteString
