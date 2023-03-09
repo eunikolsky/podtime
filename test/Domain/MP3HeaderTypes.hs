@@ -5,11 +5,13 @@ module Domain.MP3HeaderTypes
   , SamplingRate(..)
   , ValidBitrateValue(..)
   , bitrateByte
+  , frameLength
   , paddingByte
   , samplingRateByte
   ) where
 
 import Data.Bits
+import Data.Map.Strict qualified as M
 import Data.Word
 
 -- | MP3 frame header's settings which define the frame length (in bytes).
@@ -19,11 +21,32 @@ data MP3FrameSettings = MP3FrameSettings
   , mfPadding :: !Padding
   }
 
+-- | Returns frame length for the `MP3FrameSettings`.
+frameLength :: MP3FrameSettings -> Maybe Int
+frameLength (MP3FrameSettings _ SRReserved _) = Nothing
+frameLength (MP3FrameSettings BRBad _ _) = Nothing
+frameLength (MP3FrameSettings BRFree _ _) = Nothing
+frameLength (MP3FrameSettings (BRValid vbv) sr padding) = Just $
+  paddingSize padding + frameLengths M.! sr !! fromEnum vbv
+
+-- | Map from sampling rate to a list of frame lengths, one for each valid
+-- bitrate in the ascending order.
+frameLengths :: M.Map SamplingRate [Int]
+frameLengths = M.fromList
+  [ (SR32000, [144, 180, 216, 252, 288, 360, 432, 504, 576, 720, 864, 1008, 1152, 1440])
+  , (SR44100, [104, 130, 156, 182, 208, 261, 313, 365, 417, 522, 626, 731, 835, 1044])
+  , (SR48000, [96, 120, 144, 168, 192, 240, 288, 336, 384, 480, 576, 672, 768, 960])
+  ]
+
 data Padding = Padding | NoPadding
 
 instance Show Padding where
   show NoPadding = "padding off"
   show Padding = "padding on"
+
+paddingSize :: Padding -> Int
+paddingSize NoPadding = 0
+paddingSize Padding = 1
 
 -- | Returns a zeroed frame byte where only the padding bit is set
 -- corresponding to `Padding`.

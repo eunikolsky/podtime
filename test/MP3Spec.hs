@@ -7,7 +7,6 @@ import Data.Bits
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Foldable
-import Data.Map.Strict qualified as M
 import Data.Maybe
 import Data.Word
 import Domain.FrameSync
@@ -89,10 +88,6 @@ Right parsed `shouldFailWithErrorContaining` _ = expectationFailure $ "Unexpecte
 -- | Parser combinator to make sure the entire input is consumed.
 complete :: Parser a -> Parser a
 complete = (<* A.endOfInput)
-
-paddingSize :: Padding -> Int
-paddingSize NoPadding = 0
-paddingSize Padding = 1
 
 data MPEGVersion = MPEG1 | MPEG2 | MPEG25 | MPEGReserved
 
@@ -197,23 +192,6 @@ genFrame mp3Settings = do
   let contentsSize = fromMaybe 0 $ frameLength mp3Settings
   contents <- vectorOf (contentsSize - frameHeaderSize `noLessThan` 0) arbitrary
   pure $ mkHeader mp3Settings <> BS.pack contents
-
--- | Returns frame length for the `MP3FrameSettings`.
-frameLength :: MP3FrameSettings -> Maybe Int
-frameLength (MP3FrameSettings _ SRReserved _) = Nothing
-frameLength (MP3FrameSettings BRBad _ _) = Nothing
-frameLength (MP3FrameSettings BRFree _ _) = Nothing
-frameLength (MP3FrameSettings (BRValid vbv) sr padding) = Just $
-  paddingSize padding + frameLengths M.! sr !! fromEnum vbv
-
--- | Map from sampling rate to a list of frame lengths, one for each valid
--- bitrate in the ascending order.
-frameLengths :: M.Map SamplingRate [Int]
-frameLengths = M.fromList
-  [ (SR32000, [144, 180, 216, 252, 288, 360, 432, 504, 576, 720, 864, 1008, 1152, 1440])
-  , (SR44100, [104, 130, 156, 182, 208, 261, 313, 365, 417, 522, 626, 731, 835, 1044])
-  , (SR48000, [96, 120, 144, 168, 192, 240, 288, 336, 384, 480, 576, 672, 768, 960])
-  ]
 
 -- | Returns the first number if it's >= the second number; otherwise, the second
 -- number. It's a more obvious name for `max`.
