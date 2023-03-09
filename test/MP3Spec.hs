@@ -22,6 +22,25 @@ import Test.QuickCheck hiding ((.&.))
 spec :: Spec
 spec = parallel $ do
   describe "frameParser" $ do
+    describe "properties" $ do
+      forM_ [NoPadding, Padding] $ \padding ->
+        forM_ [SR44100, SR48000, SR32000] $ \samplingRate ->
+          forM_ [minBound..maxBound] $ \bitrate -> do
+            let desciption = mconcat
+                  [ "parses a "
+                  , show bitrate, ", "
+                  , show samplingRate, ", "
+                  , show padding
+                  , " frame"
+                  ]
+            modifyMaxSuccess (`div` 10) . prop desciption .
+              forAll (genFrame $ MP3FrameSettings (BRValid bitrate) samplingRate padding) $ \frame ->
+                complete frameParser `shouldSucceedOn` frame
+
+      prop "fails to parse bytes with invalid frame sync"
+        . forAll genHeaderWithInvalidFrameSync $ \header ->
+          header ~> frameParser `shouldFailWithErrorContaining` "Invalid frame sync"
+
     describe "examples" $ do
       it "parses a basic 128 kbps frame" $ do
         let frame = mkFrame
@@ -65,25 +84,6 @@ spec = parallel $ do
       it "fails to parse frame with bad bitrate" $ do
         let header = mkHeader $ MP3FrameSettings BRBad SR44100 NoPadding
         header ~> frameParser `shouldFailWithErrorContaining` "Unexpected bitrate \"bad\" (15)"
-
-    describe "properties" $ do
-      forM_ [NoPadding, Padding] $ \padding ->
-        forM_ [SR44100, SR48000, SR32000] $ \samplingRate ->
-          forM_ [minBound..maxBound] $ \bitrate -> do
-            let desciption = mconcat
-                  [ "parses a "
-                  , show bitrate, ", "
-                  , show samplingRate, ", "
-                  , show padding
-                  , " frame"
-                  ]
-            modifyMaxSuccess (`div` 10) . prop desciption .
-              forAll (genFrame $ MP3FrameSettings (BRValid bitrate) samplingRate padding) $ \frame ->
-                complete frameParser `shouldSucceedOn` frame
-
-      prop "fails to parse bytes with invalid frame sync"
-        . forAll genHeaderWithInvalidFrameSync $ \header ->
-          header ~> frameParser `shouldFailWithErrorContaining` "Invalid frame sync"
 
 -- | Checks that parsing result is a failure containing the given string.
 --
