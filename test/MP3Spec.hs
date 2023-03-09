@@ -52,7 +52,7 @@ spec = parallel $ do
         forM_ [minBound..maxBound] $ \layer -> do
           let settings = MPEGOther version layer
           it ("fails to parse " <> show settings <> " frames") $ do
-            let header = mkMPEGHeader validFrameSync settings
+            let header = mkMPEGHeader validFrameSync NotProtected settings
             header ~> frameParser `shouldFailWithErrorContaining`
               ("Unexpected MPEG version " <> versionDesc <> " frame")
 
@@ -62,7 +62,7 @@ spec = parallel $ do
             ] $ \(layer, layerDesc) -> do
         let settings = MPEGOther MPEG1 layer
         it ("fails to parse " <> show settings <> " frames") $ do
-          let header = mkMPEGHeader validFrameSync settings
+          let header = mkMPEGHeader validFrameSync NotProtected settings
           header ~> frameParser `shouldFailWithErrorContaining`
             ("Unexpected Layer " <> layerDesc <> " frame")
 
@@ -77,6 +77,10 @@ spec = parallel $ do
       it "fails to parse frame with bad bitrate" $ do
         let header = mkHeader $ MP3FrameSettings BRBad SR44100 NoPadding
         header ~> frameParser `shouldFailWithErrorContaining` "Unexpected bitrate \"bad\" (15)"
+
+      it "fails to parse frame with protection" $ do
+        let header = mkMPEGHeader validFrameSync ProtectedCRC $ MP3 standardMP3Settings
+        header ~> frameParser `shouldFailWithErrorContaining` "Unexpected CRC-protected (0) frame"
 
 -- | Checks that parsing result is a failure containing the given string.
 --
@@ -120,10 +124,12 @@ mpegLayer :: MPEGSettings -> Layer
 mpegLayer (MP3 _) = Layer3
 mpegLayer (MPEGOther _ l) = l
 
+data Protection = NotProtected | ProtectedCRC
+
 -- | Returns data for an MPEG header with the given settings.
-mkMPEGHeader :: FrameSync -> MPEGSettings -> ByteString
+mkMPEGHeader :: FrameSync -> Protection -> MPEGSettings -> ByteString
 -- TODO use Data.Binary.Put ?
-mkMPEGHeader frameSync mpeg = BS.pack
+mkMPEGHeader frameSync protection mpeg = BS.pack
   [ byte0
   , byte1
   , byte2
@@ -132,12 +138,11 @@ mkMPEGHeader frameSync mpeg = BS.pack
 
   where
     (byte0, initialByte1) = frameSyncBytes frameSync
-    noProtection = 0b1
     byte1 = orBytes
       [ mpegVersionByte (mpegVersion mpeg)
       , layerByte (mpegLayer mpeg)
       , initialByte1
-      , noProtection
+      , protectionByte protection
       ]
     byte2 = case mpeg of
       MP3 mp3Settings -> orBytes
@@ -153,7 +158,7 @@ orBytes = getIor . foldMap' Ior
 
 -- | Returns data for MP3 header with the given settings.
 mkHeader :: MP3FrameSettings -> ByteString
-mkHeader = mkMPEGHeader validFrameSync . MP3
+mkHeader = mkMPEGHeader validFrameSync NotProtected . MP3
 
 -- | Returns a zeroed frame byte where only the MPEG version bits are set
 -- corresponding to `MPEGVersion`.
@@ -171,9 +176,18 @@ layerByte Layer2        = 0b100
 layerByte Layer3        = 0b010
 layerByte LayerReserved = 0b000
 
+-- | Returns a zeroed frame byte where only the Protection bit is set
+-- corresponding to `Protection`.
+protectionByte :: Protection -> Word8
+protectionByte NotProtected = 1
+protectionByte ProtectedCRC = 0
+
+standardMP3Settings :: MP3FrameSettings
+standardMP3Settings = MP3FrameSettings (BRValid VBV128) SR44100 NoPadding
+
 -- | A standard 128 kb/s, 44.1 kHz mp3 frame header.
 standardMP3Header :: ByteString
-standardMP3Header = mkHeader (MP3FrameSettings (BRValid VBV128) SR44100 NoPadding)
+standardMP3Header = mkHeader standardMP3Settings
 
 frameHeaderSize :: Int
 frameHeaderSize = 4
@@ -183,7 +197,7 @@ mkFrame :: ByteString
 mkFrame = standardMP3Header <> contents
   where
     contents = BS.replicate contentsSize 0
-    contentsSize = fromJust (frameLength $ MP3FrameSettings (BRValid VBV128) SR44100 NoPadding) - frameHeaderSize
+    contentsSize = fromJust (frameLength standardMP3Settings) - frameHeaderSize
 
 -- | Generates an mp3 frame with the given sampling rate, bitrate and padding,
 -- and arbitrary contents.
@@ -203,4 +217,4 @@ genHeaderWithInvalidFrameSync :: Gen ByteString
 genHeaderWithInvalidFrameSync = do
   -- `chooseBoundedIntegral` is faster than `choose`
   frameSync <- chooseBoundedIntegral (0, 0b1111_1111_111 - 1)
-  pure . mkMPEGHeader (mkFrameSync frameSync) . MP3 $ MP3FrameSettings (BRValid VBV128) SR44100 NoPadding
+  pure . mkMPEGHeader (mkFrameSync frameSync) NotProtected . MP3 $ standardMP3Settings
