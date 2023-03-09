@@ -39,6 +39,18 @@ spec = parallel $ do
         let header = mkMPEGHeader validFrameSync MPEGReserved
         header ~> frameParser `shouldFailWithErrorContaining` "Unexpected MPEG version \"reserved\" (1) frame"
 
+      it "fails to parse frame with reserved sampling rate" $ do
+        let header = mkHeader $ MP3FrameSettings (BRValid VBV128) SRReserved NoPadding
+        header ~> frameParser `shouldFailWithErrorContaining` "Unexpected sampling rate \"reserved\" (3)"
+
+      it "fails to parse frame with free bitrate" $ do
+        let header = mkHeader $ MP3FrameSettings BRFree SR44100 NoPadding
+        header ~> frameParser `shouldFailWithErrorContaining` "Unexpected bitrate \"free\" (0)"
+
+      it "fails to parse frame with bad bitrate" $ do
+        let header = mkHeader $ MP3FrameSettings BRBad SR44100 NoPadding
+        header ~> frameParser `shouldFailWithErrorContaining` "Unexpected bitrate \"bad\" (15)"
+
     describe "properties" $ do
       forM_ [NoPadding, Padding] $ \padding ->
         forM_ [SR44100, SR48000, SR32000] $ \samplingRate ->
@@ -57,18 +69,6 @@ spec = parallel $ do
       prop "fails to parse bytes with invalid frame sync"
         . forAll genHeaderWithInvalidFrameSync $ \header ->
           header ~> frameParser `shouldFailWithErrorContaining` "Invalid frame sync"
-
-      prop "fails to parse frame with reserved sampling rate"
-        . forAll (genFrame $ MP3FrameSettings (BRValid VBV128) SRReserved NoPadding) $ \frame ->
-          frame ~> frameParser `shouldFailWithErrorContaining` "Unexpected sampling rate \"reserved\" (3)"
-
-      prop "fails to parse frame with free bitrate"
-        . forAll (genFrame $ MP3FrameSettings BRFree SR44100 NoPadding) $ \frame ->
-          frame ~> frameParser `shouldFailWithErrorContaining` "Unexpected bitrate \"free\" (0)"
-
-      prop "fails to parse frame with bad bitrate"
-        . forAll (genFrame $ MP3FrameSettings BRBad SR44100 NoPadding) $ \frame ->
-          frame ~> frameParser `shouldFailWithErrorContaining` "Unexpected bitrate \"bad\" (15)"
 
 -- | Checks that parsing result is a failure containing the given string.
 --
