@@ -1,28 +1,31 @@
-{-# LANGUAGE OverloadedStrings #-}
+module Main (main) where
 
-module Main where
+import           Control.Concurrent (getNumCapabilities)
+import           Control.Concurrent.Async (forConcurrently)
+import           Control.Monad (filterM)
+import qualified Data.ByteString as BS
+import           Data.List (genericLength, isSuffixOf)
+import           Data.Time.Clock (DiffTime, picosecondsToDiffTime)
+import           Data.Time.Format (defaultTimeLocale, formatTime)
+import           Data.Version (showVersion)
+import           Database.SQLite.Simple
+import           System.Directory (doesFileExist, getHomeDirectory)
+import           System.Environment (getArgs)
+import           System.FilePath.Posix ((</>))
+import           System.IO (IOMode(..), withBinaryFile)
+import           System.Process (StdStream(..), cwd, proc, readCreateProcess, std_err)
 
-import Control.Concurrent (getNumCapabilities)
-import Control.Concurrent.Async (forConcurrently)
-import Control.Monad (filterM)
-import Data.List (concat, genericLength, isSuffixOf)
-import Data.Time.Clock (DiffTime, picosecondsToDiffTime)
-import Data.Time.Format (defaultTimeLocale, formatTime)
-import Data.Version (showVersion)
-import Database.SQLite.Simple
-import System.Directory (doesFileExist, getHomeDirectory)
-import System.Environment (getArgs)
-import System.FilePath.Posix ((</>))
-import System.IO (IOMode(..), withBinaryFile)
-import System.Process (StdStream(..), cwd, proc, readCreateProcess, std_err)
-
-import Paths_podtime (version)
+import qualified MP3Original as MP3
+import           Paths_podtime (version)
 
 main :: IO ()
 main = do
   args <- getArgs
   case args of
     ["-v"] -> putStrLn . showVersion $ version
+    [file] -> do
+      d <- MP3.duration <$> BS.readFile file
+      putStrLn $ either id show d
     _ -> getNumCapabilities >>= printTotalDuration
 
 -- | The main function of the program: calculates and prints the total
@@ -35,7 +38,7 @@ printTotalDuration caps = do
     podcasts <- getPodcasts conn
     fmap concat . traverse (getUnheardEpisodes conn) $ podcasts
 
-  let episodeGroups = subgroups (ceiling $ genericLength allEpisodes / fromIntegral caps) allEpisodes
+  let episodeGroups = subgroups (ceiling @Double $ genericLength allEpisodes / fromIntegral caps) allEpisodes
   durations <- forConcurrently episodeGroups $ sumPodcastDurations (gPodderHome </> "Downloads")
   putStrLn . formatDuration . secondsToDiffTime . sum $ durations
 
@@ -47,12 +50,12 @@ printTotalDuration caps = do
  -}
 
 -- | Splits the list @xs@ into subgroups such that each one contains
--- @max@ items (the last one may contain fewer items).
+-- @maxLen@ items (the last one may contain fewer items).
 subgroups :: Int -> [a] -> [[a]]
 subgroups _ [] = []
-subgroups max xs =
-  let (group, rest) = splitAt max xs
-  in (group : subgroups max rest)
+subgroups maxLen xs =
+  let (group, rest) = splitAt maxLen xs
+  in (group : subgroups maxLen rest)
 
 -- | Returns a list of all podcasts in gPodder.
 getPodcasts :: Connection -> IO [Int]
@@ -66,7 +69,7 @@ getUnheardEpisodes :: Connection -> Int -> IO [String]
 getUnheardEpisodes conn podcast = do
   r <- queryNamed conn "SELECT p.download_folder, e.download_filename FROM episode e JOIN podcast p ON e.podcast_id = p.id WHERE p.id = :podcast AND e.state = 1 AND e.published >= (SELECT MIN(published) FROM episode WHERE podcast_id = :podcast AND state = 1 AND is_new)" [":podcast" := podcast] :: IO [(String, String)]
   let mp3s = filter (\(_, filename) -> ".mp3" `isSuffixOf` filename) r
-  return $ (\(dir, filename) -> dir </> filename) <$> mp3s
+  return $ uncurry (</>) <$> mp3s
 
 -- | Retrieves the durations of the podasts at the @paths@ (using `sox`)
 -- and sums them up. The @paths@ should be relative to @gPodderDownloads@;
@@ -75,11 +78,11 @@ sumPodcastDurations :: FilePath -> [String] -> IO Double
 sumPodcastDurations gPodderDownloads paths = do
   existingPaths <- filterM (doesFileExist . (gPodderDownloads </>)) paths
   withBinaryFile "/dev/null" WriteMode $ \dev_null -> do
-    stdout <- readCreateProcess (sox gPodderDownloads existingPaths dev_null) ""
+    stdout <- readCreateProcess (sox existingPaths dev_null) ""
     return . sum . fmap read . lines $ stdout
 
   where
-    sox gPodderDownloads existingPaths dev_null = (proc "sox" (["--info", "-D"] ++ existingPaths))
+    sox existingPaths dev_null = (proc "sox" (["--info", "-D"] <> existingPaths))
       { cwd = Just gPodderDownloads
       , std_err = UseHandle dev_null
       }
