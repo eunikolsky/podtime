@@ -100,6 +100,9 @@ spec = parallel $ do
         -- it's highly unlikely that `junk` will contain a valid MP3 frame
         mp3Parser `shouldFailOn` (validMP3FramesBytes frames <> junk)
 
+    prop "fails on junk between frames" $ \(FramesWithMiddleJunk bytes) ->
+      mp3Parser `shouldFailOn` bytes
+
 newtype ValidMP3Frame = ValidMP3Frame { validMP3FrameBytes :: ByteString }
   deriving newtype (Show)
 
@@ -116,6 +119,16 @@ newtype ValidMP3Frames = ValidMP3Frames (NonEmptyList ValidMP3Frame)
 
 validMP3FramesBytes :: ValidMP3Frames -> ByteString
 validMP3FramesBytes (ValidMP3Frames (NonEmpty frames)) = foldl' BS.append BS.empty $ validMP3FrameBytes <$> frames
+
+newtype FramesWithMiddleJunk = FramesWithMiddleJunk ByteString
+  deriving newtype (Show)
+
+instance Arbitrary FramesWithMiddleJunk where
+  arbitrary = do
+    framesBefore <- listOf1 arbitrary
+    framesAfter <- listOf1 arbitrary
+    junk <- arbitrary
+    pure . FramesWithMiddleJunk $ foldMap' id framesBefore <> junk <> foldMap' id framesAfter
 
 -- | Checks that parsing result is a failure containing the given string.
 --
