@@ -15,6 +15,7 @@ import Test.Hspec
 import Test.Hspec.Attoparsec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck hiding ((.&.))
+import Data.Foldable
 
 spec :: Spec
 spec = parallel $ do
@@ -79,6 +80,27 @@ spec = parallel $ do
       it "fails to parse frame with protection" $ do
         let header = mkMPEGHeader validFrameSync ProtectedCRC $ MP3 standardMP3Settings
         header ~> frameParser `shouldFailWithErrorContaining` "Unexpected CRC-protected (0) frame"
+
+  describe "mp3Parser" $ do
+    prop "parses multiple consequent frames" $ \frames ->
+      mp3Parser `shouldSucceedOn` validMP3FramesBytes frames
+
+newtype ValidMP3Frame = ValidMP3Frame { validMP3FrameBytes :: ByteString }
+  deriving newtype (Show)
+
+instance Arbitrary ValidMP3Frame where
+  arbitrary = do
+    bitrate <- chooseEnum (minBound, maxBound)
+    samplingRate <- elements [SR32000, SR44100, SR48000]
+    padding <- elements [NoPadding, Padding]
+    bytes <- genFrame $ MP3FrameSettings (BRValid bitrate) samplingRate padding
+    pure $ ValidMP3Frame bytes
+
+newtype ValidMP3Frames = ValidMP3Frames (NonEmptyList ValidMP3Frame)
+  deriving newtype (Arbitrary, Show)
+
+validMP3FramesBytes :: ValidMP3Frames -> ByteString
+validMP3FramesBytes (ValidMP3Frames (NonEmpty frames)) = foldl' BS.append BS.empty $ validMP3FrameBytes <$> frames
 
 -- | Checks that parsing result is a failure containing the given string.
 --

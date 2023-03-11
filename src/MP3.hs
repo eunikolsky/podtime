@@ -1,5 +1,6 @@
 module MP3
   ( frameParser
+  , mp3Parser
   ) where
 
 import Control.Monad
@@ -8,6 +9,12 @@ import Data.Attoparsec.ByteString qualified as A
 import Data.Bits
 import Data.Word
 
+-- | Parses an MP3 file — a sequence of MP3 frames without any junk before,
+-- after or between them.
+mp3Parser :: Parser ()
+mp3Parser = pure ()
+
+-- | Parses a single MP3 frame.
 frameParser :: Parser ()
 frameParser = do
   [byte0, byte1, byte2, _] <- A.count 4 A.anyWord8
