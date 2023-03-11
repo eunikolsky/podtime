@@ -86,6 +86,9 @@ spec = parallel $ do
     prop "parses multiple consequent frames" $ \frames ->
       mp3Parser `shouldSucceedOn` validMP3FramesBytes frames
 
+    prop "consumes all (valid) frames" $ \frames ->
+      complete mp3Parser `shouldSucceedOn` validMP3FramesBytes frames
+
 newtype ValidMP3Frame = ValidMP3Frame { validMP3FrameBytes :: ByteString }
   deriving newtype (Show)
 
