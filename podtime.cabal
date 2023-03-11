@@ -88,3 +88,4 @@ test-suite podtime-test
     , hspec
     , hspec-attoparsec
     , podtime
+    , quickcheck-instances

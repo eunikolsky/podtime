@@ -15,6 +15,7 @@ import Test.Hspec
 import Test.Hspec.Attoparsec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck hiding ((.&.))
+import Test.QuickCheck.Instances.ByteString ()
 import Data.Foldable
 
 spec :: Spec
@@ -88,6 +89,11 @@ spec = parallel $ do
 
     prop "consumes all (valid) frames" $ \frames ->
       complete mp3Parser `shouldSucceedOn` validMP3FramesBytes frames
+
+    prop "fails on junk before first frame" $ \frames junk ->
+      not (BS.null junk) ==>
+        -- it's highly unlikely that `junk` will contain a valid MP3 frame
+        mp3Parser `shouldFailOn` (junk <> validMP3FramesBytes frames)
 
 newtype ValidMP3Frame = ValidMP3Frame { validMP3FrameBytes :: ByteString }
   deriving newtype (Show)

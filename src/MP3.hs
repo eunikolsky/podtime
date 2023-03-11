@@ -12,7 +12,7 @@ import Data.Word
 -- | Parses an MP3 file — a sequence of MP3 frames without any junk before,
 -- after or between them.
 mp3Parser :: Parser ()
-mp3Parser = A.skipMany A.anyWord8
+mp3Parser = A.skipMany1 frameParser
 
 -- | Parses a single MP3 frame.
 frameParser :: Parser ()
