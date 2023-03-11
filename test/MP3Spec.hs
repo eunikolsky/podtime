@@ -79,7 +79,7 @@ spec = parallel $ do
 
       it "fails to parse incomplete frame headers" $ do
         forM_ [1..3] $ \numBytesLeft -> do
-          let header = BS.take numBytesLeft mkFrame
+          let header = BS.take numBytesLeft standardMP3Header
           header ~> frameParser `shouldFailWithErrorContaining` "Incomplete frame header"
 
   describe "mp3Parser" $ do
@@ -123,13 +123,6 @@ standardMP3Header = mkHeader standardMP3Settings
 
 frameHeaderSize :: Int
 frameHeaderSize = 4
-
--- | A standard 128 kb/s, 44.1 kHz mp3 frame.
-mkFrame :: ByteString
-mkFrame = standardMP3Header <> contents
-  where
-    contents = BS.replicate contentsSize 0
-    contentsSize = fromJust (frameLength standardMP3Settings) - frameHeaderSize
 
 -- | Generates an mp3 frame with the given sampling rate, bitrate and padding,
 -- and arbitrary contents.
