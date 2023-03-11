@@ -5,6 +5,7 @@ import Data.Attoparsec.ByteString (Parser)
 import Data.Attoparsec.ByteString qualified as A
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
+import Data.Foldable
 import Data.Maybe
 import Domain.FrameSync
 import Domain.MP3HeaderTypes
@@ -16,7 +17,6 @@ import Test.Hspec.Attoparsec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck hiding ((.&.))
 import Test.QuickCheck.Instances.ByteString ()
-import Data.Foldable
 
 spec :: Spec
 spec = parallel $ do
