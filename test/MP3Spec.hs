@@ -35,7 +35,7 @@ spec = parallel $ do
               forAll (genFrame $ MP3FrameSettings (BRValid bitrate) samplingRate padding) $ \frame ->
                 complete frameParser `shouldSucceedOn` frame
 
-      prop "fails to parse bytes with invalid frame sync"
+      prop "fails to parse frames with invalid frame sync"
         . forAll genHeaderWithInvalidFrameSync $ \header ->
           header ~> frameParser `shouldFailWithErrorContaining` "Invalid frame sync"
 
@@ -80,6 +80,11 @@ spec = parallel $ do
       it "fails to parse frame with protection" $ do
         let header = mkMPEGHeader validFrameSync ProtectedCRC $ MP3 standardMP3Settings
         header ~> frameParser `shouldFailWithErrorContaining` "Unexpected CRC-protected (0) frame"
+
+      it "fails to parse incomplete frame headers" $ do
+        forM_ [1..3] $ \numBytesLeft -> do
+          let header = BS.take numBytesLeft mkFrame
+          header ~> frameParser `shouldFailWithErrorContaining` "Incomplete frame header"
 
   describe "mp3Parser" $ do
     prop "parses multiple consequent frames" $ \frames ->

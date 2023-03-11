@@ -4,7 +4,7 @@ module MP3
   ) where
 
 import Control.Monad
-import Data.Attoparsec.ByteString (Parser)
+import Data.Attoparsec.ByteString ((<?>), Parser)
 import Data.Attoparsec.ByteString qualified as A
 import Data.Bits
 import Data.Word
@@ -17,7 +17,7 @@ mp3Parser = pure ()
 -- | Parses a single MP3 frame.
 frameParser :: Parser ()
 frameParser = do
-  [byte0, byte1, byte2, _] <- A.count 4 A.anyWord8
+  [byte0, byte1, byte2, _] <- A.count 4 A.anyWord8 <?> "Incomplete frame header"
 
   frameSyncValidator (byte0, byte1)
   mpegVersionValidator byte1
