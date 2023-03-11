@@ -95,6 +95,11 @@ spec = parallel $ do
         -- it's highly unlikely that `junk` will contain a valid MP3 frame
         mp3Parser `shouldFailOn` (junk <> validMP3FramesBytes frames)
 
+    prop "fails on junk after last frame" $ \frames junk ->
+      not (BS.null junk) ==>
+        -- it's highly unlikely that `junk` will contain a valid MP3 frame
+        mp3Parser `shouldFailOn` (validMP3FramesBytes frames <> junk)
+
 newtype ValidMP3Frame = ValidMP3Frame { validMP3FrameBytes :: ByteString }
   deriving newtype (Show)
 
