@@ -1,5 +1,6 @@
 module MP3
-  ( frameParser
+  ( AudioDuration(..)
+  , frameParser
   , mp3Parser
   ) where
 
@@ -9,10 +10,20 @@ import Data.Attoparsec.ByteString qualified as A
 import Data.Bits
 import Data.Word
 
--- | Parses an MP3 file — a sequence of MP3 frames without any junk before,
--- after or between them.
-mp3Parser :: Parser ()
-mp3Parser = A.skipMany1 frameParser <* A.endOfInput
+-- | Duration of an MP3 file, in seconds.
+newtype AudioDuration = AudioDuration { getAudioDuration :: Float }
+  deriving newtype (Eq)
+
+instance Show AudioDuration where
+  show (AudioDuration d) = show d <> " s"
+
+-- | Parses an MP3 file (a sequence of MP3 frames without any junk before,
+-- after or between them) and returns the audio duration.
+mp3Parser :: Parser AudioDuration
+mp3Parser = do
+  A.skipMany1 frameParser
+  A.endOfInput
+  pure $ AudioDuration 0.026122
 
 -- | Parses a single MP3 frame.
 frameParser :: Parser ()

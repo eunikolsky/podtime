@@ -103,6 +103,10 @@ spec = parallel $ do
     prop "fails on junk between frames" $ \(FramesWithMiddleJunk bytes) ->
       mp3Parser `shouldFailOn` bytes
 
+    prop "calculates the duration of one 44.1 kHz frame"
+      . forAll (genFrame standardMP3Settings) $ \frame ->
+        frame ~> mp3Parser `shouldParse` AudioDuration 0.026122
+
 newtype ValidMP3Frame = ValidMP3Frame { validMP3FrameBytes :: ByteString }
   deriving newtype (Show)
 
