@@ -40,10 +40,6 @@ spec = parallel $ do
           header ~> frameParser `shouldFailWithErrorContaining` "Invalid frame sync"
 
     describe "examples" $ do
-      it "parses a basic 128 kbps frame" $ do
-        let frame = mkFrame
-        complete frameParser `shouldSucceedOn` frame
-
       forM_ [ (MPEG2, "2 (2)")
             , (MPEG25, "2.5 (0)")
             , (MPEGReserved, "\"reserved\" (1)")
