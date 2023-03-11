@@ -21,10 +21,9 @@ instance Show AudioDuration where
 -- after or between them) and returns the audio duration.
 mp3Parser :: Parser AudioDuration
 mp3Parser = do
-  samplingRate <- frameParser
-  A.skipMany frameParser
+  samplingRates <- A.many1 frameParser
   A.endOfInput
-  pure $ frameDuration samplingRate
+  pure . sum $ frameDuration <$> samplingRates
 
 frameDuration :: SamplingRate -> AudioDuration
 frameDuration = AudioDuration . (samplesPerFrame /) . samplingRateHz

@@ -111,6 +111,10 @@ spec = parallel $ do
         . forAll (genFrame $ MP3FrameSettings (BRValid VBV128) sr NoPadding) $ \frame ->
           frame ~> mp3Parser `parseSatisfies` ((< 1e-6) . abs . (duration -))
 
+    prop "calculates the duration of all the frames" $ \frames ->
+      -- FIXME increase the epsilon to at least 1e-6
+      dfFrames frames ~> mp3Parser `parseSatisfies` ((< 1e-4) . abs . (dfDuration frames -))
+
 newtype ValidMP3Frame = ValidMP3Frame { validMP3FrameBytes :: ByteString }
   deriving newtype (Show)
 
@@ -126,6 +130,7 @@ newtype ValidMP3Frames = ValidMP3Frames (NonEmptyList ValidMP3Frame)
   deriving newtype (Arbitrary, Show)
 
 validMP3FramesBytes :: ValidMP3Frames -> ByteString
+-- FIXME foldMap'
 validMP3FramesBytes (ValidMP3Frames (NonEmpty frames)) = foldl' BS.append BS.empty $ validMP3FrameBytes <$> frames
 
 newtype FramesWithMiddleJunk = FramesWithMiddleJunk ByteString
@@ -137,6 +142,34 @@ instance Arbitrary FramesWithMiddleJunk where
     framesAfter <- listOf1 arbitrary
     junk <- arbitrary
     pure . FramesWithMiddleJunk $ foldMap' id framesBefore <> junk <> foldMap' id framesAfter
+
+-- | Arbitrary MP3 frames with their duration.
+data DurationFrames = DurationFrames
+  { dfFrames :: ByteString
+  , dfDuration :: AudioDuration
+  }
+  deriving stock (Show)
+
+instance Arbitrary DurationFrames where
+  arbitrary = do
+    sr44100Frames <- listOf1 $ chooseFrame SR44100
+    sr48000Frames <- listOf1 $ chooseFrame SR48000
+    sr32000Frames <- listOf1 $ chooseFrame SR32000
+    let duration = AudioDuration $ sum
+          -- FIXME dedup constants
+          [ fromIntegral (length sr44100Frames) * 0.026122
+          , fromIntegral (length sr48000Frames) * 0.024
+          , fromIntegral (length sr32000Frames) * 0.036
+          ]
+    shuffled <- shuffle $ mconcat [sr44100Frames, sr48000Frames, sr32000Frames]
+    pure $ DurationFrames (mconcat shuffled) duration
+
+    where
+      chooseFrame :: SamplingRate -> Gen ByteString
+      chooseFrame samplingRate = do
+        bitrate <- chooseEnum (minBound, maxBound)
+        padding <- elements [NoPadding, Padding]
+        genFrame $ MP3FrameSettings (BRValid bitrate) samplingRate padding
 
 -- | Checks that parsing result is a failure containing the given string.
 --
