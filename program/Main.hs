@@ -6,7 +6,7 @@ import           Control.Concurrent (getNumCapabilities)
 import           Control.Concurrent.Async (forConcurrently)
 import           Control.Monad (filterM)
 import qualified Data.ByteString as BS
-import           Data.List (genericLength, isSuffixOf)
+import           Data.List (genericLength)
 import           Data.Time.Clock (DiffTime, picosecondsToDiffTime)
 import           Data.Time.Format (defaultTimeLocale, formatTime)
 import           Data.Version (showVersion)
@@ -75,12 +75,15 @@ getNewEpisodes conn podcast = do
       SELECT p.download_folder || '/' || e.download_filename
       FROM episode e
       JOIN podcast p ON e.podcast_id = p.id
-      WHERE p.id = :podcast AND e.state = 1 AND e.published >= (
-        SELECT MIN(published) FROM episode WHERE podcast_id = :podcast AND state = 1 AND is_new
-      )
+      WHERE p.id = :podcast
+        AND e.state = 1
+        AND e.published >= (
+          SELECT MIN(published) FROM episode WHERE podcast_id = :podcast AND state = 1 AND is_new
+        )
+        AND e.download_filename LIKE '%.mp3'
     |]
-    [":podcast" := podcast] :: IO [Only FilePath]
-  pure . filter (".mp3" `isSuffixOf`) . fmap fromOnly $ results
+    [":podcast" := podcast]
+  pure $ fromOnly <$> results
 
 -- | Retrieves the durations of the podasts at the @paths@ (using `sox`)
 -- and sums them up. The @paths@ should be relative to @gPodderDownloads@;
