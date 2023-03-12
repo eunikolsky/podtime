@@ -29,6 +29,10 @@ int-testd:
 testfw:
 	@stack test --fast --file-watch $(MAIN_TEST_TARGET)
 
+.PHONY:
+int-testfw:
+	@stack test --fast --file-watch $(INTEGRATION_TEST_TARGET)
+
 # run like this: `m testfw-seed SEED=1032969830`
 .PHONY:
 testfw-seed:

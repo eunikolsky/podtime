@@ -100,4 +100,6 @@ test-suite integration-test
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
                        -main-is IntegrationSpec
   build-depends:
-      hspec
+      directory
+    , filepath
+    , hspec
