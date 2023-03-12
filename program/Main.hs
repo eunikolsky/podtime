@@ -1,3 +1,5 @@
+{-# LANGUAGE QuasiQuotes #-}
+
 module Main (main) where
 
 import           Control.Concurrent (getNumCapabilities)
@@ -14,6 +16,7 @@ import           System.Environment (getArgs)
 import           System.FilePath.Posix ((</>))
 import           System.IO (IOMode(..), withBinaryFile)
 import           System.Process (StdStream(..), cwd, proc, readCreateProcess, std_err)
+import           Text.RawString.QQ
 
 import qualified MP3Original as MP3
 import           Paths_podtime (version)
@@ -67,8 +70,17 @@ getPodcasts conn = do
 -- its id. Only @.mp3@ files are returned.
 getNewEpisodes :: Connection -> Int -> IO [String]
 getNewEpisodes conn podcast = do
-  r <- queryNamed conn "SELECT p.download_folder, e.download_filename FROM episode e JOIN podcast p ON e.podcast_id = p.id WHERE p.id = :podcast AND e.state = 1 AND e.published >= (SELECT MIN(published) FROM episode WHERE podcast_id = :podcast AND state = 1 AND is_new)" [":podcast" := podcast] :: IO [(String, String)]
-  let mp3s = filter (\(_, filename) -> ".mp3" `isSuffixOf` filename) r
+  results <- queryNamed conn
+    [r|
+      SELECT p.download_folder, e.download_filename
+      FROM episode e
+      JOIN podcast p ON e.podcast_id = p.id
+      WHERE p.id = :podcast AND e.state = 1 AND e.published >= (
+        SELECT MIN(published) FROM episode WHERE podcast_id = :podcast AND state = 1 AND is_new
+      )
+    |]
+    [":podcast" := podcast] :: IO [(String, String)]
+  let mp3s = filter (\(_, filename) -> ".mp3" `isSuffixOf` filename) results
   return $ uncurry (</>) <$> mp3s
 
 -- | Retrieves the durations of the podasts at the @paths@ (using `sox`)

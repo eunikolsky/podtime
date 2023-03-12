@@ -66,6 +66,7 @@ executable podtime
     , directory
     , filepath
     , process
+    , raw-strings-qq
     , sqlite-simple
     , time
 
