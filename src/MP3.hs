@@ -1,16 +1,38 @@
 module MP3
-  ( frameParser
+  ( AudioDuration(..)
+  , frameParser
+  , mp3Parser
   ) where
 
 import Control.Monad
-import Data.Attoparsec.ByteString (Parser)
+import Data.Attoparsec.ByteString ((<?>), Parser)
 import Data.Attoparsec.ByteString qualified as A
 import Data.Bits
 import Data.Word
 
-frameParser :: Parser ()
+-- | Duration of an MP3 file, in seconds.
+newtype AudioDuration = AudioDuration { getAudioDuration :: Float }
+  deriving newtype (Eq, Ord, Fractional, Num)
+
+instance Show AudioDuration where
+  show (AudioDuration d) = show d <> " s"
+
+-- | Parses an MP3 file (a sequence of MP3 frames without any junk before,
+-- after or between them) and returns the audio duration.
+mp3Parser :: Parser AudioDuration
+mp3Parser = do
+  samplingRates <- A.many1 frameParser
+  A.endOfInput
+  pure . sum $ frameDuration <$> samplingRates
+
+frameDuration :: SamplingRate -> AudioDuration
+frameDuration = AudioDuration . (samplesPerFrame /) . samplingRateHz
+  where samplesPerFrame = 1152
+
+-- | Parses a single MP3 frame and returns its sampling rate.
+frameParser :: Parser SamplingRate
 frameParser = do
-  [byte0, byte1, byte2, _] <- A.count 4 A.anyWord8
+  [byte0, byte1, byte2, _] <- A.count 4 A.anyWord8 <?> "Incomplete frame header"
 
   frameSyncValidator (byte0, byte1)
   mpegVersionValidator byte1
@@ -24,7 +46,7 @@ frameParser = do
       contentsSize = frameSize bitrate samplingRate - 4 + paddingSize
 
   _ <- A.take contentsSize
-  pure ()
+  pure samplingRate
 
 -- | Validates that the header bytes contain the valid frame sync.
 -- It's called a validator because it returns unit (or error) since we don't
@@ -62,6 +84,11 @@ protectionValidator byte = case 0b0000_0001 .&. byte of
 
 -- | Sampling rate of a frame; it's required to calculate the frame length.
 data SamplingRate = SR32000Hz | SR44100Hz | SR48000Hz
+
+instance Show SamplingRate where
+  show SR32000Hz = "32 kHz"
+  show SR44100Hz = "44.1 kHz"
+  show SR48000Hz = "48 kHz"
 
 -- | Bitrate of a frame; it's required to calculate the frame length.
 data Bitrate
@@ -114,10 +141,6 @@ bitrateParser byte = case shiftR byte 4 of
 frameSize :: Bitrate -> SamplingRate -> Int
 frameSize br sr = floor @Float $ 144 * bitrateBitsPerSecond br / samplingRateHz sr
   where
-    samplingRateHz SR32000Hz = 32000
-    samplingRateHz SR44100Hz = 44100
-    samplingRateHz SR48000Hz = 48000
-
     bitrateBitsPerSecond BR32kbps  = 32000
     bitrateBitsPerSecond BR40kbps  = 40000
     bitrateBitsPerSecond BR48kbps  = 48000
@@ -132,6 +155,11 @@ frameSize br sr = floor @Float $ 144 * bitrateBitsPerSecond br / samplingRateHz 
     bitrateBitsPerSecond BR224kbps = 224000
     bitrateBitsPerSecond BR256kbps = 256000
     bitrateBitsPerSecond BR320kbps = 320000
+
+samplingRateHz :: Num a => SamplingRate -> a
+samplingRateHz SR32000Hz = 32000
+samplingRateHz SR44100Hz = 44100
+samplingRateHz SR48000Hz = 48000
 
 -- TODO try https://github.com/stevana/bits-and-bobs
 paddingBitIndex :: Int

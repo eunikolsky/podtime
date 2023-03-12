@@ -19,6 +19,7 @@ common common-options
   default-extensions:
       BinaryLiterals
     , DerivingStrategies
+    , GeneralizedNewtypeDeriving
     , ImportQualifiedPost
     , NumericUnderscores
     , OverloadedStrings
@@ -33,9 +34,9 @@ common common-options
                        -fhide-source-paths
                        -Wmissing-export-lists
                        -Wpartial-fields
-                       -Wmissing-methods
                        -Wmissing-deriving-strategies
                        -Wunused-packages
+                       -Werror=missing-methods
                        -Werror=missing-fields
                        -Werror=incomplete-patterns
                        -Werror=incomplete-record-updates
@@ -87,3 +88,4 @@ test-suite podtime-test
     , hspec
     , hspec-attoparsec
     , podtime
+    , quickcheck-instances
