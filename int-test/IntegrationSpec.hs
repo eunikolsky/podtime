@@ -10,19 +10,26 @@ main = do
   mp3s <- findEpisodes
   hspec $ spec mp3s
 
-spec :: [FilePath] -> Spec
-spec mp3s =
+spec :: Episodes -> Spec
+spec (Episodes _ mp3s) =
   describe "mp3Parser" $ do
     forM_ (take 3 mp3s) $ \mp3 ->
       it ("parses " <> show mp3)
         pending
 
-findEpisodes :: IO [FilePath]
+-- | Contains a list of episodes relative to the base directory. This separation
+-- is necessary in order to shorten the test names.
+data Episodes = Episodes
+  FilePath -- ^ base directory
+  [FilePath] -- ^ episodes
+
+findEpisodes :: IO Episodes
 findEpisodes = do
   baseDir <- gPodderDownloadsDir
   episodeDirs <- filterM doesDirectoryExist =<< ls baseDir
   files <- join <$> forM episodeDirs ls
-  pure $ filter ((== ".mp3") . takeExtension) files
+  let mp3s = filter ((== ".mp3") . takeExtension) files
+  pure . Episodes baseDir $ makeRelative baseDir <$> mp3s
 
 -- | Lists items in the given directory like `listDirectory`, but returns
 -- full paths.
