@@ -15,7 +15,7 @@ check-hlint:
 
 .PHONY:
 testd:
-	@ghcid --command "stack ghci --test --main-is $$( stack ide targets 2>&1 | grep -F :test: ) --ghci-options=-fobject-code" --test "main"
+	@ghcid --command "HSPEC_FORMAT=failed-examples stack ghci --test --main-is $$( stack ide targets 2>&1 | grep -F :test: ) --ghci-options=-fobject-code" --test "main"
 
 .PHONY:
 testfw:
