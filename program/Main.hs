@@ -29,14 +29,14 @@ main = do
     _ -> getNumCapabilities >>= printTotalDuration
 
 -- | The main function of the program: calculates and prints the total
--- duration of the unheard episodes.
+-- duration of the new episodes.
 printTotalDuration :: Int -> IO ()
 printTotalDuration caps = do
   homeDir <- getHomeDirectory
   let gPodderHome = homeDir </> "gPodder"
   allEpisodes <- withConnection (gPodderHome </> "Database") $ \conn -> do
     podcasts <- getPodcasts conn
-    fmap concat . traverse (getUnheardEpisodes conn) $ podcasts
+    fmap concat . traverse (getNewEpisodes conn) $ podcasts
 
   let episodeGroups = subgroups (ceiling @Double $ genericLength allEpisodes / fromIntegral caps) allEpisodes
   durations <- forConcurrently episodeGroups $ sumPodcastDurations (gPodderHome </> "Downloads")
@@ -44,9 +44,9 @@ printTotalDuration caps = do
 
 {-
  podcasts :: [Int]
- fmap getUnheardEpisodes podcasts :: [IO [String]]
- traverse getUnheardEpisodes podcasts :: IO [[String]]
- fmap join . traverse getUnheardEpisodes $ podcasts :: IO [String]
+ fmap getNewEpisodes podcasts :: [IO [String]]
+ traverse getNewEpisodes podcasts :: IO [[String]]
+ fmap join . traverse getNewEpisodes $ podcasts :: IO [String]
  -}
 
 -- | Splits the list @xs@ into subgroups such that each one contains
@@ -65,8 +65,8 @@ getPodcasts conn = do
 
 -- | Returns the filenames of all not-listened-to episodes of the @podcast@ by
 -- its id. Only @.mp3@ files are returned.
-getUnheardEpisodes :: Connection -> Int -> IO [String]
-getUnheardEpisodes conn podcast = do
+getNewEpisodes :: Connection -> Int -> IO [String]
+getNewEpisodes conn podcast = do
   r <- queryNamed conn "SELECT p.download_folder, e.download_filename FROM episode e JOIN podcast p ON e.podcast_id = p.id WHERE p.id = :podcast AND e.state = 1 AND e.published >= (SELECT MIN(published) FROM episode WHERE podcast_id = :podcast AND state = 1 AND is_new)" [":podcast" := podcast] :: IO [(String, String)]
   let mp3s = filter (\(_, filename) -> ".mp3" `isSuffixOf` filename) r
   return $ uncurry (</>) <$> mp3s
