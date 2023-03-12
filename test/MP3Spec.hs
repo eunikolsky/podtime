@@ -113,7 +113,7 @@ spec = parallel $ do
 
     prop "calculates the duration of all the frames" $ \frames ->
       -- FIXME increase the epsilon to at least 1e-6
-      dfFrames frames ~> mp3Parser `parseSatisfies` ((< 1e-4) . abs . (dfDuration frames -))
+      dfBytes frames ~> mp3Parser `parseSatisfies` ((< 1e-4) . abs . (dfDuration frames -))
 
 newtype ValidMP3Frame = ValidMP3Frame { validMP3FrameBytes :: ByteString }
   deriving newtype (Show)
@@ -143,12 +143,33 @@ instance Arbitrary FramesWithMiddleJunk where
     junk <- arbitrary
     pure . FramesWithMiddleJunk $ foldMap' id framesBefore <> junk <> foldMap' id framesAfter
 
+-- | A wrapper for `MP3FrameSettings` that only prints its `SamplingRate` in `show`
+-- (because only that value is relevant to frame duration).
+newtype MP3FrameSamplingRateSettings = MP3FrameSamplingRateSettings MP3FrameSettings
+
+instance Show MP3FrameSamplingRateSettings where
+  show (MP3FrameSamplingRateSettings s) = show $ mfSamplingRate s
+
+-- | A generated MP3 frame that prints only its settings in `show`.
+data MP3Frame = MP3Frame
+  { mp3fSettings :: MP3FrameSamplingRateSettings
+  , mp3fData :: ByteString
+  }
+
+instance Show MP3Frame where
+  show = show . mp3fSettings
+
 -- | Arbitrary MP3 frames with their duration.
 data DurationFrames = DurationFrames
-  { dfFrames :: ByteString
+  { dfFrames :: [MP3Frame]
+  -- ^ the type was changed from `ByteString` in order not to print lots of bytes
+  -- when test fails, but only the relevant information — sampling rates
   , dfDuration :: AudioDuration
   }
   deriving stock (Show)
+
+dfBytes :: DurationFrames -> ByteString
+dfBytes = mconcat . fmap mp3fData . dfFrames
 
 instance Arbitrary DurationFrames where
   arbitrary = do
@@ -162,14 +183,16 @@ instance Arbitrary DurationFrames where
           , fromIntegral (length sr32000Frames) * 0.036
           ]
     shuffled <- shuffle $ mconcat [sr44100Frames, sr48000Frames, sr32000Frames]
-    pure $ DurationFrames (mconcat shuffled) duration
+    pure $ DurationFrames shuffled duration
 
     where
-      chooseFrame :: SamplingRate -> Gen ByteString
+      chooseFrame :: SamplingRate -> Gen MP3Frame
       chooseFrame samplingRate = do
         bitrate <- chooseEnum (minBound, maxBound)
         padding <- elements [NoPadding, Padding]
-        genFrame $ MP3FrameSettings (BRValid bitrate) samplingRate padding
+        let settings = MP3FrameSettings (BRValid bitrate) samplingRate padding
+        bytes <- genFrame settings
+        pure $ MP3Frame (MP3FrameSamplingRateSettings settings) bytes
 
 -- | Checks that parsing result is a failure containing the given string.
 --
