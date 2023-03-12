@@ -112,8 +112,7 @@ spec = parallel $ do
           frame ~> mp3Parser `parseSatisfies` ((< 1e-6) . abs . (duration -))
 
     prop "calculates the duration of all the frames" $ \frames ->
-      -- FIXME increase the epsilon to at least 1e-6
-      dfBytes frames ~> mp3Parser `parseSatisfies` ((< 1e-4) . abs . (dfDuration frames -))
+      dfBytes frames ~> mp3Parser `parseSatisfies` ((< 1e-5) . abs . (dfDuration frames -))
 
 newtype ValidMP3Frame = ValidMP3Frame { validMP3FrameBytes :: ByteString }
   deriving newtype (Show)
@@ -178,7 +177,7 @@ instance Arbitrary DurationFrames where
     sr32000Frames <- listOf1 $ chooseFrame SR32000
     let duration = AudioDuration $ sum
           -- FIXME dedup constants
-          [ fromIntegral (length sr44100Frames) * 0.026122
+          [ fromIntegral (length sr44100Frames) * 0.026122448
           , fromIntegral (length sr48000Frames) * 0.024
           , fromIntegral (length sr32000Frames) * 0.036
           ]
