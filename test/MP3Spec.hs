@@ -109,10 +109,15 @@ spec = parallel $ do
           ] $ \(sr, duration) ->
       prop ("calculates the duration of one " <> show sr <> " frame")
         . forAll (genFrame $ MP3FrameSettings (BRValid VBV128) sr NoPadding) $ \frame ->
-          frame ~> mp3Parser `parseSatisfies` ((< 1e-6) . abs . (duration -))
+          frame ~> mp3Parser `parsesDuration` duration
 
     prop "calculates the duration of all the frames" $ \frames ->
-      dfBytes frames ~> mp3Parser `parseSatisfies` ((< 1e-5) . abs . (dfDuration frames -))
+      dfBytes frames ~> mp3Parser `parsesDuration` dfDuration frames
+
+-- | Checks that the parsed duration equals to the expected duration with the
+-- precision of `1e-5`.
+parsesDuration :: Either String AudioDuration -> AudioDuration -> Expectation
+result `parsesDuration` duration = result `parseSatisfies` ((< 1e-5) . abs . (duration -))
 
 newtype ValidMP3Frame = ValidMP3Frame { validMP3FrameBytes :: ByteString }
   deriving newtype (Show)
