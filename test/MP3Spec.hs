@@ -134,8 +134,7 @@ newtype ValidMP3Frames = ValidMP3Frames (NonEmptyList ValidMP3Frame)
   deriving newtype (Arbitrary, Show)
 
 validMP3FramesBytes :: ValidMP3Frames -> ByteString
--- FIXME foldMap'
-validMP3FramesBytes (ValidMP3Frames (NonEmpty frames)) = foldl' BS.append BS.empty $ validMP3FrameBytes <$> frames
+validMP3FramesBytes (ValidMP3Frames (NonEmpty frames)) = mconcat $ validMP3FrameBytes <$> frames
 
 newtype FramesWithMiddleJunk = FramesWithMiddleJunk ByteString
   deriving newtype (Show)
@@ -145,7 +144,7 @@ instance Arbitrary FramesWithMiddleJunk where
     framesBefore <- listOf1 arbitrary
     framesAfter <- listOf1 arbitrary
     junk <- arbitrary
-    pure . FramesWithMiddleJunk $ foldMap' id framesBefore <> junk <> foldMap' id framesAfter
+    pure . FramesWithMiddleJunk . mconcat $ concat [framesBefore, [junk], framesAfter]
 
 -- | A wrapper for `MP3FrameSettings` that only prints its `SamplingRate` in `show`
 -- (because only that value is relevant to frame duration).
