@@ -7,6 +7,7 @@ import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Foldable
 import Data.Maybe
+import Data.Map.Strict qualified as M
 import Domain.FrameSync
 import Domain.MP3HeaderTypes
 import Domain.MPEGHeaderTypes
@@ -103,10 +104,7 @@ spec = parallel $ do
     prop "fails on junk between frames" $ \(FramesWithMiddleJunk bytes) ->
       mp3Parser `shouldFailOn` bytes
 
-    forM_ [ (SR44100, 0.026122)
-          , (SR48000, 0.024)
-          , (SR32000, 0.036)
-          ] $ \(sr, duration) ->
+    forM_ (M.toList frameDurations) $ \(sr, duration) ->
       prop ("calculates the duration of one " <> show sr <> " frame")
         . forAll (genFrame $ MP3FrameSettings (BRValid VBV128) sr NoPadding) $ \frame ->
           frame ~> mp3Parser `parsesDuration` duration
@@ -174,16 +172,24 @@ data DurationFrames = DurationFrames
 dfBytes :: DurationFrames -> ByteString
 dfBytes = mconcat . fmap mp3fData . dfFrames
 
+-- | Map from frame's sampling rate to its duration. For MP3, it's calculated
+-- as: `1152 / samplingRate`.
+frameDurations :: M.Map SamplingRate AudioDuration
+frameDurations = M.fromList
+  [ (SR44100, 0.026122448)
+  , (SR48000, 0.024)
+  , (SR32000, 0.036)
+  ]
+
 instance Arbitrary DurationFrames where
   arbitrary = do
     sr44100Frames <- listOf1 $ chooseFrame SR44100
     sr48000Frames <- listOf1 $ chooseFrame SR48000
     sr32000Frames <- listOf1 $ chooseFrame SR32000
-    let duration = AudioDuration $ sum
-          -- FIXME dedup constants
-          [ fromIntegral (length sr44100Frames) * 0.026122448
-          , fromIntegral (length sr48000Frames) * 0.024
-          , fromIntegral (length sr32000Frames) * 0.036
+    let duration = sum
+          [ fromIntegral (length sr44100Frames) * frameDurations M.! SR44100
+          , fromIntegral (length sr48000Frames) * frameDurations M.! SR48000
+          , fromIntegral (length sr32000Frames) * frameDurations M.! SR32000
           ]
     shuffled <- shuffle $ mconcat [sr44100Frames, sr48000Frames, sr32000Frames]
     pure $ DurationFrames shuffled duration
