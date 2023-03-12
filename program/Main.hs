@@ -1,10 +1,12 @@
+{-# LANGUAGE QuasiQuotes #-}
+
 module Main (main) where
 
 import           Control.Concurrent (getNumCapabilities)
 import           Control.Concurrent.Async (forConcurrently)
 import           Control.Monad (filterM)
 import qualified Data.ByteString as BS
-import           Data.List (genericLength, isSuffixOf)
+import           Data.List (genericLength)
 import           Data.Time.Clock (DiffTime, picosecondsToDiffTime)
 import           Data.Time.Format (defaultTimeLocale, formatTime)
 import           Data.Version (showVersion)
@@ -14,6 +16,7 @@ import           System.Environment (getArgs)
 import           System.FilePath.Posix ((</>))
 import           System.IO (IOMode(..), withBinaryFile)
 import           System.Process (StdStream(..), cwd, proc, readCreateProcess, std_err)
+import           Text.RawString.QQ
 
 import qualified MP3Original as MP3
 import           Paths_podtime (version)
@@ -29,14 +32,14 @@ main = do
     _ -> getNumCapabilities >>= printTotalDuration
 
 -- | The main function of the program: calculates and prints the total
--- duration of the unheard episodes.
+-- duration of the new episodes.
 printTotalDuration :: Int -> IO ()
 printTotalDuration caps = do
   homeDir <- getHomeDirectory
   let gPodderHome = homeDir </> "gPodder"
   allEpisodes <- withConnection (gPodderHome </> "Database") $ \conn -> do
     podcasts <- getPodcasts conn
-    fmap concat . traverse (getUnheardEpisodes conn) $ podcasts
+    fmap concat . traverse (getNewEpisodes conn) $ podcasts
 
   let episodeGroups = subgroups (ceiling @Double $ genericLength allEpisodes / fromIntegral caps) allEpisodes
   durations <- forConcurrently episodeGroups $ sumPodcastDurations (gPodderHome </> "Downloads")
@@ -44,9 +47,9 @@ printTotalDuration caps = do
 
 {-
  podcasts :: [Int]
- fmap getUnheardEpisodes podcasts :: [IO [String]]
- traverse getUnheardEpisodes podcasts :: IO [[String]]
- fmap join . traverse getUnheardEpisodes $ podcasts :: IO [String]
+ fmap getNewEpisodes podcasts :: [IO [String]]
+ traverse getNewEpisodes podcasts :: IO [[String]]
+ fmap join . traverse getNewEpisodes $ podcasts :: IO [String]
  -}
 
 -- | Splits the list @xs@ into subgroups such that each one contains
@@ -65,11 +68,22 @@ getPodcasts conn = do
 
 -- | Returns the filenames of all not-listened-to episodes of the @podcast@ by
 -- its id. Only @.mp3@ files are returned.
-getUnheardEpisodes :: Connection -> Int -> IO [String]
-getUnheardEpisodes conn podcast = do
-  r <- queryNamed conn "SELECT p.download_folder, e.download_filename FROM episode e JOIN podcast p ON e.podcast_id = p.id WHERE p.id = :podcast AND e.state = 1 AND e.published >= (SELECT MIN(published) FROM episode WHERE podcast_id = :podcast AND state = 1 AND is_new)" [":podcast" := podcast] :: IO [(String, String)]
-  let mp3s = filter (\(_, filename) -> ".mp3" `isSuffixOf` filename) r
-  return $ uncurry (</>) <$> mp3s
+getNewEpisodes :: Connection -> Int -> IO [FilePath]
+getNewEpisodes conn podcast = do
+  results <- queryNamed conn
+    [r|
+      SELECT p.download_folder || '/' || e.download_filename
+      FROM episode e
+      JOIN podcast p ON e.podcast_id = p.id
+      WHERE p.id = :podcast
+        AND e.state = 1
+        AND e.published >= (
+          SELECT MIN(published) FROM episode WHERE podcast_id = :podcast AND state = 1 AND is_new
+        )
+        AND e.download_filename LIKE '%.mp3'
+    |]
+    [":podcast" := podcast]
+  pure $ fromOnly <$> results
 
 -- | Retrieves the durations of the podasts at the @paths@ (using `sox`)
 -- and sums them up. The @paths@ should be relative to @gPodderDownloads@;
