@@ -89,3 +89,21 @@ test-suite podtime-test
     , hspec-attoparsec
     , podtime
     , quickcheck-instances
+
+test-suite integration-test
+  import:              common-options
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      int-test
+  -- very weird, but this `main-is` is not enough
+  -- https://stackoverflow.com/questions/50659327/stack-build-results-in-output-was-redirected-with-o-but-no-output-will-be-gen/50659706#50659706
+  main-is:             IntegrationSpec.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+                       -main-is IntegrationSpec
+  build-depends:
+      bytestring
+    , directory
+    , filepath
+    , hspec
+    , hspec-attoparsec
+    , podtime
+    , unicode-show

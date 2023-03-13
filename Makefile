@@ -1,27 +1,39 @@
+MAIN_TEST_TARGET = podtime:test:podtime-test
+INTEGRATION_TEST_TARGET = podtime:test:integration-test
+
 .PHONY:
 check: check-build check-test check-hlint
 
 .PHONY:
 check-build:
 	stack --verbosity error build --fast
+	stack --verbosity error build --no-run-tests --fast $(INTEGRATION_TEST_TARGET)
 
 .PHONY:
 check-test:
-	stack --verbosity error test --fast --ta='-f silent'
+	stack --verbosity error test --fast --ta='-f silent' $(MAIN_TEST_TARGET)
 
 .PHONY:
 check-hlint:
-	hlint -j4 src program test
+	hlint -j4 src program test int-test
 
 .PHONY:
 testd:
-	@ghcid --command "HSPEC_FORMAT=failed-examples stack ghci --test --main-is $$( stack ide targets 2>&1 | grep -F :test: ) --ghci-options=-fobject-code" --test "main"
+	@ghcid --command "HSPEC_FORMAT=failed-examples stack ghci --test --main-is $(MAIN_TEST_TARGET) --ghci-options=-fobject-code" --test "main"
+
+.PHONY:
+int-testd:
+	@ghcid --command "stack ghci --test --main-is $(INTEGRATION_TEST_TARGET) --ghci-options=-fobject-code" --test "main"
 
 .PHONY:
 testfw:
-	@stack test --fast --file-watch
+	@stack test --fast --file-watch $(MAIN_TEST_TARGET)
+
+.PHONY:
+int-testfw:
+	@stack test --fast --file-watch $(INTEGRATION_TEST_TARGET)
 
 # run like this: `m testfw-seed SEED=1032969830`
 .PHONY:
 testfw-seed:
-	@stack test --fast --file-watch --ta="--seed $${SEED}"
+	@stack test --fast --file-watch --ta="--seed $${SEED}" $(MAIN_TEST_TARGET)

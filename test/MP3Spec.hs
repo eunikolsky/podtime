@@ -84,6 +84,15 @@ spec = parallel $ do
           let header = BS.take numBytesLeft standardMP3Header
           header ~> frameParser `shouldFailWithErrorContaining` "Incomplete frame header"
 
+      describe "invalid frame sync error contains hex and ASCII representation" $ do
+        it "for ID3 header" $ do
+          let id3Header = "ID3\x04\x00" :: ByteString
+          id3Header ~> frameParser `shouldFailWithErrorContaining` "Invalid frame sync (0x4944, ID)"
+
+        it "for null header" $ do
+          let header = BS.replicate 4 0x00
+          header ~> frameParser `shouldFailWithErrorContaining` "Invalid frame sync (0x0000, \NUL\NUL)"
+
   describe "mp3Parser" $ do
     prop "parses multiple consequent frames" $ \frames ->
       mp3Parser `shouldSucceedOn` validMP3FramesBytes frames
