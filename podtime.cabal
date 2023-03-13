@@ -47,7 +47,8 @@ library
   import:              common-options
   hs-source-dirs:      src
   exposed-modules:
-      MP3
+      ID3
+    , MP3
     , MP3Original
   build-depends:
       attoparsec
@@ -78,6 +79,7 @@ test-suite podtime-test
   main-is:             Spec.hs
   other-modules:
       MP3Spec
+    , ID3Spec
     , Domain.FrameSync, Domain.MP3HeaderTypes, Domain.MPEGHeaderTypes
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:
