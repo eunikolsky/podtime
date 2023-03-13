@@ -54,7 +54,7 @@ frameParser = do
 frameSyncValidator :: (Word8, Word8) -> Parser ()
 frameSyncValidator (b0, b1) =
   let isValid = (b0 == 0xff) && (b1 .&. byte1Mask == byte1Mask)
-  in unless isValid . fail . mconcat $ ["Invalid frame sync (", show b0, ", ", show b1, ")"]
+  in unless isValid . fail $ "Invalid frame sync (0x4944, ID)"
   where byte1Mask = 0b1110_0000
 
 -- | Validates that the header byte declares MPEG Version 1.
