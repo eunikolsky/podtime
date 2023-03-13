@@ -9,6 +9,7 @@ import Data.Attoparsec.ByteString ((<?>), Parser)
 import Data.Attoparsec.ByteString qualified as A
 import Data.Bits
 import Data.Word
+import Text.Printf
 
 -- | Duration of an MP3 file, in seconds.
 newtype AudioDuration = AudioDuration { getAudioDuration :: Float }
@@ -54,7 +55,7 @@ frameParser = do
 frameSyncValidator :: (Word8, Word8) -> Parser ()
 frameSyncValidator (b0, b1) =
   let isValid = (b0 == 0xff) && (b1 .&. byte1Mask == byte1Mask)
-  in unless isValid . fail $ "Invalid frame sync (0x4944, ID)"
+  in unless isValid . fail $ printf "Invalid frame sync (0x%02x%02x, %c%c)" b0 b1 b0 b1
   where byte1Mask = 0b1110_0000
 
 -- | Validates that the header byte declares MPEG Version 1.
