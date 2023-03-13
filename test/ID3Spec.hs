@@ -23,20 +23,29 @@ spec = parallel $ do
         id3Parser `shouldFailOn` tag
 
 sampleID3Tag :: ByteString
-sampleID3Tag = "ID3\x04\x00\x00\x00\x00\x00\x01" <> "\x00"
+sampleID3Tag = mkID3Tag "ID3" "\x04\x00"
 
 -- | Generates an ID3 v2.4 tag where the identifier "ID3" is replaced with arbitrary bytes.
 genTagWithInvalidID3 :: Gen ByteString
 genTagWithInvalidID3 = do
   -- it's unlikely that this will generate "ID3"
   identifier <- vectorOf 3 arbitrary
-  pure $ BS.pack identifier <> "\x04\x00\x00\x00\x00\x00\x01" <> "\x00"
+  pure $ mkID3Tag (BS.pack identifier) "\x04\x00"
 
 -- | Generates an ID3 tag with an arbitrary, non-2.4 version.
 genTagWithUnsupportedVersion :: Gen ByteString
 genTagWithUnsupportedVersion = do
   version <- vectorOf 2 arbitrary
-  -- FIXME dedup bytes
   if version == [4, 0]
     then discard
-    else pure $ "ID3" <> BS.pack version <> "\x00\x00\x00\x00\x01" <> "\x00"
+    else pure $ mkID3Tag "ID3" (BS.pack version)
+
+mkID3Tag
+  :: ByteString -- ^ identifier
+  -> ByteString -- ^ version
+  -> ByteString
+mkID3Tag identifier version = mconcat [identifier, version, flags, size, contents]
+  where
+    flags = "\x00"
+    size = "\x00\x00\x00\x01"
+    contents = "\x00"
