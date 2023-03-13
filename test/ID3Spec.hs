@@ -1,9 +1,12 @@
 module ID3Spec (spec) where
 
 import Data.ByteString (ByteString)
+import Data.ByteString qualified as BS
 import ID3
 import Test.Hspec
 import Test.Hspec.Attoparsec
+import Test.Hspec.QuickCheck
+import Test.QuickCheck
 
 spec :: Spec
 spec = parallel $ do
@@ -11,5 +14,16 @@ spec = parallel $ do
     it "parses a sample ID3 v2.4 tag" $ do
       id3Parser `shouldSucceedOn` sampleID3Tag
 
+    prop "fails to parse tag with invalid ID3 identifier"
+      . forAll genTagWithInvalidID3 $ \tag ->
+        id3Parser `shouldFailOn` tag
+
 sampleID3Tag :: ByteString
 sampleID3Tag = "ID3\x04\x00\x00\x00\x00\x00\x01" <> "\x00"
+
+-- | Generates an ID3 v2.4 tag where the identifier "ID3" is replaced with arbitrary bytes.
+genTagWithInvalidID3 :: Gen ByteString
+genTagWithInvalidID3 = do
+  -- it's unlikely that this will generate "ID3"
+  identifier <- vectorOf 3 arbitrary
+  pure $ BS.pack identifier <> "\x04\x00\x00\x00\x00\x00\x01" <> "\x00"
