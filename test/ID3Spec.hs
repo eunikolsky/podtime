@@ -1,5 +1,6 @@
 module ID3Spec (spec) where
 
+import Data.Attoparsec.ByteString qualified as A
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Word
@@ -27,6 +28,10 @@ spec = parallel $ do
       . forAll genTagWithFlags $ \tag ->
         id3Parser `shouldFailOn` tag
 
+    prop "consumes the contents (single-byte sized)"
+      . forAll genSmallSizeTag $ \tag ->
+        (id3Parser <* A.endOfInput) `shouldSucceedOn` tag
+
 sampleID3Tag :: ByteString
 sampleID3Tag = mkID3Tag defaultID3TagSettings
 
@@ -51,18 +56,30 @@ genTagWithFlags = do
   flags <- getPositive <$> arbitrary
   pure . mkID3Tag $ defaultID3TagSettings { idsFlags = flags }
 
+-- | Generates an ID3 tag with arbitrary contents (where size could be encoded
+-- in 7 bits, a synchsafe integer by definition).
+genSmallSizeTag :: Gen ByteString
+genSmallSizeTag = do
+  size <- chooseEnum (0, (2 ^ (7 :: Word8)) - 1)
+  contents <- vectorOf (fromIntegral size) arbitrary
+  pure . mkID3Tag $ defaultID3TagSettings
+    { idsSize = size
+    , idsContents = BS.pack contents
+    }
+
 data ID3TagSettings = ID3TagSettings
   { idsIdentifier :: ByteString
   , idsVersion :: ByteString
   , idsFlags :: Word8
+  , idsSize :: Word8 -- ^ must be <= 127 (MSB must be zero)
+  , idsContents :: ByteString -- ^ `length idsContents` must equal `idsSize`
   }
 
 defaultID3TagSettings :: ID3TagSettings
-defaultID3TagSettings = ID3TagSettings "ID3" "\x04\x00" 0
+defaultID3TagSettings = ID3TagSettings "ID3" "\x04\x00" 0 1 "\x00"
 
 mkID3Tag :: ID3TagSettings -> ByteString
-mkID3Tag ids = mconcat [idsIdentifier ids, idsVersion ids, flags, size, contents]
+mkID3Tag ids = mconcat [idsIdentifier ids, idsVersion ids, flags, size, idsContents ids]
   where
     flags = BS.singleton $ idsFlags ids
-    size = "\x00\x00\x00\x01"
-    contents = "\x00"
+    size = "\x00\x00\x00" <> BS.singleton (idsSize ids)
