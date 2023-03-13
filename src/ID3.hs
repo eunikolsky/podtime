@@ -8,4 +8,4 @@ import Data.Functor
 
 -- | Parses an ID3 v2.4 tag.
 id3Parser :: Parser ()
-id3Parser = A.string "ID3\x04\x00" $> ()
+id3Parser = A.string "ID3\x04\x00\x00" $> ()
