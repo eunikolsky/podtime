@@ -67,6 +67,10 @@ genSmallSizeTag = do
     , idsContents = BS.pack contents
     }
 
+-- also print generated size; print only N first bytes of the bytestring;
+-- implement Arbitrary with shrinking: leave only 1,2,3,4 least-significant bytes,
+-- try shrinking each using Integer's shrink
+
 data ID3TagSettings = ID3TagSettings
   { idsIdentifier :: ByteString
   , idsVersion :: ByteString
