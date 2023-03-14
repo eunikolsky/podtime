@@ -28,8 +28,8 @@ spec = parallel $ do
       . forAll genTagWithFlags $ \tag ->
         id3Parser `shouldFailOn` tag
 
-    prop "consumes the contents (single-byte sized)" $ \(SmallSizedTag tag) ->
-      (id3Parser <* A.endOfInput) `shouldSucceedOn` tag
+    prop "consumes the contents (single-byte sized)" $ \smallSizedTag ->
+      (id3Parser <* A.endOfInput) `shouldSucceedOn` sstBytes smallSizedTag
 
 sampleID3Tag :: ByteString
 sampleID3Tag = mkID3Tag defaultID3TagSettings
@@ -55,21 +55,27 @@ genTagWithFlags = do
   flags <- getPositive <$> arbitrary
   pure . mkID3Tag $ defaultID3TagSettings { idsFlags = flags }
 
--- | An ID3 tag with arbitrary contents (where size could be encoded
+-- | An ID3 tag with arbitrary contents of arbitrary size (where size could be encoded
 -- in 7 bits, a synchsafe integer by definition).
-newtype SmallSizedTag = SmallSizedTag ByteString
+data SmallSizedTag = SmallSizedTag
+  { sstSize :: Word8
+  , sstBytes :: ByteString
+  }
   deriving stock (Show)
 
 instance Arbitrary SmallSizedTag where
   arbitrary = do
     size <- chooseEnum (0, (2 ^ (7 :: Word8)) - 1)
     contents <- vectorOf (fromIntegral size) arbitrary
-    pure . SmallSizedTag . mkID3Tag $ defaultID3TagSettings
-      { idsSize = size
-      , idsContents = BS.pack contents
+    pure $ SmallSizedTag
+      { sstBytes = mkID3Tag $ defaultID3TagSettings
+        { idsSize = size
+        , idsContents = BS.pack contents
+        }
+      , sstSize = size
       }
 
--- also print generated size; print only N first bytes of the bytestring;
+-- print only N first bytes of the bytestring;
 -- implement Arbitrary with shrinking: leave only 1,2,3,4 least-significant bytes,
 -- try shrinking each using Integer's shrink
 
