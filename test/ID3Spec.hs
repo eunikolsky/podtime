@@ -35,7 +35,7 @@ spec = parallel $ do
     -- ~8 seconds to test 100 cases, which is too slow for fast feedback
     modifyMaxSuccess (`div` 10) .
       prop "consumes the entire contents" $ \arbitrarySizedTag ->
-        (id3Parser <* A.endOfInput) `shouldSucceedOn` sstBytes arbitrarySizedTag
+        (id3Parser <* A.endOfInput) `shouldSucceedOn` astBytes arbitrarySizedTag
 
 sampleID3Tag :: ByteString
 sampleID3Tag = mkID3Tag defaultID3TagSettings
@@ -63,32 +63,32 @@ genTagWithFlags = do
 
 -- | An ID3 tag with arbitrary contents of arbitrary size. The max
 -- size is `2^28 - 1` because it's a synchsafe integer.
-data SmallSizedTag = SmallSizedTag
-  { sstSize :: Word32
-  , sstBytes :: ByteString
+data AnySizedTag = AnySizedTag
+  { astSize :: Word32
+  , astBytes :: ByteString
   }
 
-instance Show SmallSizedTag where
-  show SmallSizedTag { sstSize, sstBytes } = mconcat
-    [ "SmallSizedTag ("
-    , show sstSize
+instance Show AnySizedTag where
+  show AnySizedTag { astSize, astBytes } = mconcat
+    [ "AnySizedTag ("
+    , show astSize
     , " content bytes): "
-    , show $ (if shouldTrim then BS.take limit else id) sstBytes
+    , show $ (if shouldTrim then BS.take limit else id) astBytes
     , if shouldTrim then "…" else ""
     ]
     where limit = 16
-          shouldTrim = BS.length sstBytes > limit
+          shouldTrim = BS.length astBytes > limit
 
-instance Arbitrary SmallSizedTag where
+instance Arbitrary AnySizedTag where
   arbitrary = do
     size <- chooseEnum (0, (2 ^ (28 :: Word8)) - 1)
     contents <- genContents size
-    pure $ SmallSizedTag
-      { sstBytes = mkID3Tag $ defaultID3TagSettings
+    pure $ AnySizedTag
+      { astBytes = mkID3Tag $ defaultID3TagSettings
         { idsSize = toSynchsafe size
         , idsContents = contents
         }
-      , sstSize = size
+      , astSize = size
       }
 
     where
@@ -115,15 +115,15 @@ instance Arbitrary SmallSizedTag where
   -- before shrinking the size as a number since an error in parsing is more
   -- likely an incorrect (byte by byte) parsing of synchsafe size than using
   -- the size incorrectly
-  shrink SmallSizedTag { sstSize, sstBytes } = do
-    size <- shrink sstSize
-    pure $ SmallSizedTag
-      { sstSize = size
-      , sstBytes = mkID3Tag $ defaultID3TagSettings
+  shrink AnySizedTag { astSize, astBytes } = do
+    size <- shrink astSize
+    pure $ AnySizedTag
+      { astSize = size
+      , astBytes = mkID3Tag $ defaultID3TagSettings
         { idsSize = toSynchsafe size
         -- TODO it's inconvenient that this code needs to know the header length
         -- and remember to remove it before taking bytes for the contents
-        , idsContents = BS.take (fromIntegral size) . BS.drop id3TagHeaderLength $ sstBytes
+        , idsContents = BS.take (fromIntegral size) . BS.drop id3TagHeaderLength $ astBytes
         }
       }
 
