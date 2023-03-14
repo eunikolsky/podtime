@@ -21,6 +21,7 @@ common common-options
     , DerivingStrategies
     , GeneralizedNewtypeDeriving
     , ImportQualifiedPost
+    , NamedFieldPuns
     , NumericUnderscores
     , OverloadedStrings
     , TypeApplications
@@ -36,6 +37,7 @@ common common-options
                        -Wpartial-fields
                        -Wmissing-deriving-strategies
                        -Wunused-packages
+                       -Werror=empty-enumerations
                        -Werror=missing-methods
                        -Werror=missing-fields
                        -Werror=incomplete-patterns
