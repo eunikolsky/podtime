@@ -21,6 +21,7 @@ common common-options
     , DerivingStrategies
     , GeneralizedNewtypeDeriving
     , ImportQualifiedPost
+    , NamedFieldPuns
     , NumericUnderscores
     , OverloadedStrings
     , TypeApplications

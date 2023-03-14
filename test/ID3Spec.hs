@@ -61,7 +61,17 @@ data SmallSizedTag = SmallSizedTag
   { sstSize :: Word8
   , sstBytes :: ByteString
   }
-  deriving stock (Show)
+
+instance Show SmallSizedTag where
+  show SmallSizedTag { sstSize, sstBytes } = mconcat
+    [ "SmallSizedTag ("
+    , show sstSize
+    , " bytes): "
+    , show $ (if shouldTrim then BS.take limit else id) sstBytes
+    , if shouldTrim then "…" else ""
+    ]
+    where limit = 16
+          shouldTrim = BS.length sstBytes > limit
 
 instance Arbitrary SmallSizedTag where
   arbitrary = do
@@ -75,7 +85,6 @@ instance Arbitrary SmallSizedTag where
       , sstSize = size
       }
 
--- print only N first bytes of the bytestring;
 -- implement Arbitrary with shrinking: leave only 1,2,3,4 least-significant bytes,
 -- try shrinking each using Integer's shrink
 
