@@ -29,7 +29,7 @@ spec = parallel $ do
 
     prop "fails to parse tag with unsupported version"
       . forAll genTagWithUnsupportedVersion $ \tag ->
-        id3Parser `shouldFailOn` tag
+        tag ~> id3Parser `shouldFailWithErrorContaining` "Unsupported ID3 version"
 
     prop "fails to parse tag with any flags"
       . forAll genTagWithFlags $ \tag ->

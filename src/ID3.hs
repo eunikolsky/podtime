@@ -13,8 +13,8 @@ import Data.Word
 id3Parser :: Parser ()
 id3Parser = do
   _ <- A.string "ID3"
-  _ <- A.satisfy isSupportedVersion
-  _ <- A.string "\x00\x00"
+  _ <- (A.satisfy isSupportedVersion <* A.word8 0) <?> "Unsupported ID3 version"
+  _ <- A.word8 0
   synchsafeSizeBytes <- A.count 4 (A.satisfy isCorrectSynchsafe) <?> "Incorrect size bytes"
   let size = unSynchsafe synchsafeSizeBytes
   _ <- A.take $ fromIntegral size
