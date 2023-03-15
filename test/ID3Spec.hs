@@ -12,6 +12,7 @@ import Test.Hspec
 import Test.Hspec.Attoparsec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck hiding ((.&.))
+import TestCommon
 
 spec :: Spec
 spec = parallel $ do
@@ -36,6 +37,10 @@ spec = parallel $ do
     modifyMaxSuccess (`div` 10) .
       prop "consumes the entire contents" $ \arbitrarySizedTag ->
         (id3Parser <* A.endOfInput) `shouldSucceedOn` astBytes arbitrarySizedTag
+
+    prop "fails to parse incorrect synchsafe size"
+      . forAll genHeaderWithIncorrectSize $ \header ->
+        header ~> id3Parser `shouldFailWithErrorContaining` "Incorrect size bytes"
 
 sampleID3Tag :: ByteString
 sampleID3Tag = mkID3Tag defaultID3TagSettings
@@ -128,6 +133,16 @@ instance Arbitrary AnySizedTag where
       }
 
     where id3TagHeaderLength = 10
+
+-- | Generates an ID3 tag header with an arbitrary size where at least one byte
+-- has the most-significant bit set.
+genHeaderWithIncorrectSize :: Gen ByteString
+genHeaderWithIncorrectSize = do
+  size :: [Word8] <- vectorOf 4 arbitrary
+  byteIndex <- chooseInt (0, 3)
+  let replacedSize = (\(index, byte) -> if byteIndex == index then 0b1000_0000 .|. byte else byte)
+        <$> zip [0..] size
+  pure . mkID3Tag $ defaultID3TagSettings { idsSize = BS.pack replacedSize }
 
 -- | Returns the first number if it's <= the second number; otherwise, the second
 -- number. It's a more obvious name for `min`.

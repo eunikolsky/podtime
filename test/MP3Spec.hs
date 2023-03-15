@@ -6,8 +6,8 @@ import Data.Attoparsec.ByteString qualified as A
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Foldable
-import Data.Maybe
 import Data.Map.Strict qualified as M
+import Data.Maybe
 import Domain.FrameSync
 import Domain.MP3HeaderTypes
 import Domain.MPEGHeaderTypes
@@ -18,6 +18,7 @@ import Test.Hspec.Attoparsec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck hiding ((.&.))
 import Test.QuickCheck.Instances.ByteString ()
+import TestCommon
 
 spec :: Spec
 spec = parallel $ do
@@ -211,13 +212,6 @@ instance Arbitrary DurationFrames where
         let settings = MP3FrameSettings (BRValid bitrate) samplingRate padding
         bytes <- genFrame settings
         pure $ MP3Frame (MP3FrameSamplingRateSettings settings) bytes
-
--- | Checks that parsing result is a failure containing the given string.
---
--- > input ~> parser `shouldFailWithErrorContaining` "foo"
-shouldFailWithErrorContaining :: Show a => Either String a -> String -> Expectation
-Left err `shouldFailWithErrorContaining` expected = err `shouldContain` expected
-Right parsed `shouldFailWithErrorContaining` _ = expectationFailure $ "Unexpectedly parsed " <> show parsed
 
 -- | Parser combinator to make sure the entire input is consumed.
 complete :: Parser a -> Parser a

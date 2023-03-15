@@ -24,6 +24,7 @@ common common-options
     , NamedFieldPuns
     , NumericUnderscores
     , OverloadedStrings
+    , ScopedTypeVariables
     , TypeApplications
   -- most of the list is copied from summoner
   -- https://github.com/kowainik/summoner/blob/main/summoner-cli/examples/stack-full/stack-full.cabal
@@ -82,6 +83,7 @@ test-suite podtime-test
   other-modules:
       MP3Spec
     , ID3Spec
+    , TestCommon
     , Domain.FrameSync, Domain.MP3HeaderTypes, Domain.MPEGHeaderTypes
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:

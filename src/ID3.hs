@@ -2,7 +2,7 @@ module ID3
   ( id3Parser
   ) where
 
-import Data.Attoparsec.ByteString (Parser)
+import Data.Attoparsec.ByteString ((<?>), Parser)
 import Data.Attoparsec.ByteString qualified as A
 import Data.Bits
 import Data.Foldable
@@ -13,10 +13,15 @@ import Data.Word
 id3Parser :: Parser ()
 id3Parser = do
   _ <- A.string "ID3\x04\x00\x00"
-  synchsafeSizeBytes <- A.count 4 A.anyWord8
+  synchsafeSizeBytes <- A.count 4 (A.satisfy isCorrectSynchsafe) <?> "Incorrect size bytes"
   let size = unSynchsafe synchsafeSizeBytes
   _ <- A.take $ fromIntegral size
   pure ()
+
+-- | Checks that the given byte is a part of a synchsafe integer, that is its
+-- most significant bit must be reset.
+isCorrectSynchsafe :: Word8 -> Bool
+isCorrectSynchsafe = (< 0x80)
 
 -- | Converts a 28-bit synchsafe integer (in 4 bytes) to a proper 28-bit integer,
 -- that is dropping the most significant bit of every byte and "skipping" those
