@@ -33,7 +33,7 @@ spec = parallel $ do
 
     prop "fails to parse tag with any flags"
       . forAll genTagWithFlags $ \tag ->
-        id3Parser `shouldFailOn` tag
+        tag ~> id3Parser `shouldFailWithErrorContaining` "Unexpected flags"
 
     -- decrease the number of generated cases per test run because it takes
     -- ~8 seconds to test 100 cases, which is too slow for fast feedback
