@@ -12,11 +12,17 @@ import Data.Word
 -- | Parses an ID3 v2.4 tag.
 id3Parser :: Parser ()
 id3Parser = do
-  _ <- A.string "ID3\x04\x00\x00"
+  _ <- A.string "ID3"
+  _ <- A.satisfy isSupportedVersion
+  _ <- A.string "\x00\x00"
   synchsafeSizeBytes <- A.count 4 (A.satisfy isCorrectSynchsafe) <?> "Incorrect size bytes"
   let size = unSynchsafe synchsafeSizeBytes
   _ <- A.take $ fromIntegral size
   pure ()
+
+-- | Checks if the major version byte declares a supported version.
+isSupportedVersion :: Word8 -> Bool
+isSupportedVersion byte = byte == 3 || byte == 4
 
 -- | Checks that the given byte is a part of a synchsafe integer, that is its
 -- most significant bit must be reset.
