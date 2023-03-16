@@ -5,6 +5,7 @@ module AnySizedTag
 import Control.Exception
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
+import Data.Ord
 import Data.Word
 import Domain.ID3Tag
 import Test.QuickCheck
@@ -28,8 +29,13 @@ instance Show AnySizedTag where
           shouldTrim = BS.length astBytes > limit
 
 instance Arbitrary AnySizedTag where
+  -- | The implementation uses `Gen`'s `size` parameter to limit the maximum
+  -- generated tag size — it defines the number of bits used in the arbitrary
+  -- tag size, for example `resize 10` will generate sizes up to `2 ^ 10` bytes.
+  -- The value is automatically limited to the `[1; 28]` range.
   arbitrary = do
-    size <- chooseEnum (0, (2 ^ (28 :: Word8)) - 1)
+    genSize <- clamp (1, 28) <$> getSize
+    size <- chooseEnum (0, (2 ^ genSize) - 1)
     contents <- genContents size
     pure $ AnySizedTag
       { astBytes = mkID3Tag $ defaultID3TagSettings

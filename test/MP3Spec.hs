@@ -123,9 +123,8 @@ spec = parallel $ do
     prop "calculates the duration of all the frames" $ \frames ->
       dfBytes frames ~> mp3Parser `parsesDuration` dfDuration frames
 
-    -- FIXME slower tests even with fewer test cases here
-    modifyMaxSuccess (`div` 10)
-      . prop "parses ID3 tag before all frames" $ \id3Tag frames ->
+    prop "parses ID3 tag before all frames" $ \frames ->
+      forAll (resize 12 arbitrary) $ \id3Tag ->
         mp3Parser `shouldSucceedOn` (astBytes id3Tag <> validMP3FramesBytes frames)
 
 -- | Checks that the parsed duration equals to the expected duration with the
