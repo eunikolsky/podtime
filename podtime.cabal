@@ -83,8 +83,9 @@ test-suite podtime-test
   other-modules:
       MP3Spec
     , ID3Spec
-    , TestCommon
-    , Domain.FrameSync, Domain.MP3HeaderTypes, Domain.MPEGHeaderTypes
+    , TestCommon, AnySizedTag
+    , Domain.FrameSync, Domain.ID3Tag
+    , Domain.MP3HeaderTypes, Domain.MPEGHeaderTypes
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       QuickCheck
