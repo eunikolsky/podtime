@@ -1,5 +1,6 @@
 module MP3Spec (spec) where
 
+import AnySizedTag
 import Control.Monad
 import Data.Attoparsec.ByteString (Parser)
 import Data.Attoparsec.ByteString qualified as A
@@ -121,6 +122,11 @@ spec = parallel $ do
 
     prop "calculates the duration of all the frames" $ \frames ->
       dfBytes frames ~> mp3Parser `parsesDuration` dfDuration frames
+
+    -- FIXME slower tests even with fewer test cases here
+    modifyMaxSuccess (`div` 10)
+      . prop "parses ID3 tag before all frames" $ \id3Tag frames ->
+        mp3Parser `shouldSucceedOn` (astBytes id3Tag <> validMP3FramesBytes frames)
 
 -- | Checks that the parsed duration equals to the expected duration with the
 -- precision of `1e-5`.

@@ -4,11 +4,13 @@ module MP3
   , mp3Parser
   ) where
 
+import Control.Applicative
 import Control.Monad
 import Data.Attoparsec.ByteString ((<?>), Parser)
 import Data.Attoparsec.ByteString qualified as A
 import Data.Bits
 import Data.Word
+import ID3
 import Text.Printf
 
 -- | Duration of an MP3 file, in seconds.
@@ -22,6 +24,7 @@ instance Show AudioDuration where
 -- after or between them) and returns the audio duration.
 mp3Parser :: Parser AudioDuration
 mp3Parser = do
+  _ <- optional id3Parser
   samplingRates <- A.many1 frameParser
   A.endOfInput
   pure . sum $ frameDuration <$> samplingRates
