@@ -1,13 +1,14 @@
 module MP3Spec (spec) where
 
+import AnySizedTag
 import Control.Monad
 import Data.Attoparsec.ByteString (Parser)
 import Data.Attoparsec.ByteString qualified as A
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Foldable
-import Data.Maybe
 import Data.Map.Strict qualified as M
+import Data.Maybe
 import Domain.FrameSync
 import Domain.MP3HeaderTypes
 import Domain.MPEGHeaderTypes
@@ -18,6 +19,7 @@ import Test.Hspec.Attoparsec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck hiding ((.&.))
 import Test.QuickCheck.Instances.ByteString ()
+import TestCommon
 
 spec :: Spec
 spec = parallel $ do
@@ -121,6 +123,10 @@ spec = parallel $ do
     prop "calculates the duration of all the frames" $ \frames ->
       dfBytes frames ~> mp3Parser `parsesDuration` dfDuration frames
 
+    prop "parses ID3 tag before all frames" $ \frames ->
+      forAll (resize 12 arbitrary) $ \id3Tag ->
+        mp3Parser `shouldSucceedOn` (astBytes id3Tag <> validMP3FramesBytes frames)
+
 -- | Checks that the parsed duration equals to the expected duration with the
 -- precision of `1e-5`.
 parsesDuration :: Either String AudioDuration -> AudioDuration -> Expectation
@@ -211,13 +217,6 @@ instance Arbitrary DurationFrames where
         let settings = MP3FrameSettings (BRValid bitrate) samplingRate padding
         bytes <- genFrame settings
         pure $ MP3Frame (MP3FrameSamplingRateSettings settings) bytes
-
--- | Checks that parsing result is a failure containing the given string.
---
--- > input ~> parser `shouldFailWithErrorContaining` "foo"
-shouldFailWithErrorContaining :: Show a => Either String a -> String -> Expectation
-Left err `shouldFailWithErrorContaining` expected = err `shouldContain` expected
-Right parsed `shouldFailWithErrorContaining` _ = expectationFailure $ "Unexpectedly parsed " <> show parsed
 
 -- | Parser combinator to make sure the entire input is consumed.
 complete :: Parser a -> Parser a

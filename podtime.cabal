@@ -21,8 +21,10 @@ common common-options
     , DerivingStrategies
     , GeneralizedNewtypeDeriving
     , ImportQualifiedPost
+    , NamedFieldPuns
     , NumericUnderscores
     , OverloadedStrings
+    , ScopedTypeVariables
     , TypeApplications
   -- most of the list is copied from summoner
   -- https://github.com/kowainik/summoner/blob/main/summoner-cli/examples/stack-full/stack-full.cabal
@@ -36,6 +38,7 @@ common common-options
                        -Wpartial-fields
                        -Wmissing-deriving-strategies
                        -Wunused-packages
+                       -Werror=empty-enumerations
                        -Werror=missing-methods
                        -Werror=missing-fields
                        -Werror=incomplete-patterns
@@ -47,7 +50,8 @@ library
   import:              common-options
   hs-source-dirs:      src
   exposed-modules:
-      MP3
+      ID3
+    , MP3
     , MP3Original
   build-depends:
       attoparsec
@@ -71,14 +75,17 @@ executable podtime
     , sqlite-simple
     , time
 
-test-suite podtime-test
+test-suite unit-test
   import:              common-options
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
   other-modules:
       MP3Spec
-    , Domain.FrameSync, Domain.MP3HeaderTypes, Domain.MPEGHeaderTypes
+    , ID3Spec
+    , TestCommon, AnySizedTag
+    , Domain.FrameSync, Domain.ID3Tag
+    , Domain.MP3HeaderTypes, Domain.MPEGHeaderTypes
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       QuickCheck

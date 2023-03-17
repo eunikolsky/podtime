@@ -1,12 +1,15 @@
-MAIN_TEST_TARGET = podtime:test:podtime-test
+MAIN_TEST_TARGET = podtime:test:unit-test
 INTEGRATION_TEST_TARGET = podtime:test:integration-test
 
 .PHONY:
-check: check-build check-test check-hlint
+check: check-build check-build-int-tests check-test check-hlint
 
 .PHONY:
 check-build:
 	stack --verbosity error build --fast
+
+.PHONY:
+check-build-int-tests:
 	stack --verbosity error build --no-run-tests --fast $(INTEGRATION_TEST_TARGET)
 
 .PHONY:
