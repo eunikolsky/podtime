@@ -75,7 +75,7 @@ executable podtime
     , sqlite-simple
     , time
 
-test-suite podtime-test
+test-suite unit-test
   import:              common-options
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test

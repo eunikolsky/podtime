@@ -1,4 +1,4 @@
-MAIN_TEST_TARGET = podtime:test:podtime-test
+MAIN_TEST_TARGET = podtime:test:unit-test
 INTEGRATION_TEST_TARGET = podtime:test:integration-test
 
 .PHONY:
