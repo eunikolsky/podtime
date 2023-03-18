@@ -51,6 +51,7 @@ library
   hs-source-dirs:      src
   exposed-modules:
       ID3
+    , ID3V1
     , MP3
     , MP3Original
   build-depends:
@@ -82,8 +83,8 @@ test-suite unit-test
   main-is:             Spec.hs
   other-modules:
       MP3Spec
-    , ID3Spec
-    , TestCommon, AnySizedTag
+    , ID3Spec, ID3V1Spec
+    , TestCommon, AnySizedTag, ID3V1ValidTag
     , Domain.FrameSync, Domain.ID3Tag
     , Domain.MP3HeaderTypes, Domain.MPEGHeaderTypes
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
