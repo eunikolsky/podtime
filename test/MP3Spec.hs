@@ -129,9 +129,14 @@ spec = parallel $ do
       dfBytes frames ~> mp3Parser `parsesDuration` dfDuration frames
 
     describe "failed end-of-file" $ do
-      prop "contains description" $ \(ValidMP3Frame frame) -> do
-        let junk = "\0 \xa0\0\xff\xfb"
+      let junk = "\0 \xa0\0\xff\xfb"
+
+      prop "contains description" $ \(ValidMP3Frame frame) ->
         (frame <> junk) ~> mp3Parser `shouldFailWithErrorContaining` "Expected end-of-file"
+
+      prop "contains position" $ \(ValidMP3Frame frame) -> do
+        let position = show $ BS.length frame
+        (frame <> junk) ~> mp3Parser `shouldFailWithErrorContaining` position
 
     describe "ID3 support" $ do
       prop "skips ID3 v2 tag before all frames" $ \frames ->

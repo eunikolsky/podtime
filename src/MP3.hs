@@ -4,6 +4,7 @@ module MP3
   , mp3Parser
   ) where
 
+import AttoparsecExtra
 import Control.Applicative
 import Control.Monad
 import Data.Attoparsec.ByteString ((<?>), Parser)
@@ -32,7 +33,8 @@ mp3Parser = do
     skipPostID3Padding
   samplingRates <- A.many1 frameParser
   _ <- optional ID3V1.id3Parser
-  A.endOfInput <?> "Expected end-of-file"
+  pos <- getPos
+  A.endOfInput <?> "Expected end-of-file at byte " <> show pos
   pure . sum $ frameDuration <$> samplingRates
 
 frameDuration :: SamplingRate -> AudioDuration

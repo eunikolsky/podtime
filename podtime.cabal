@@ -50,7 +50,8 @@ library
   import:              common-options
   hs-source-dirs:      src
   exposed-modules:
-      ID3
+      AttoparsecExtra
+    , ID3
     , ID3V1
     , MP3
     , MP3Original
