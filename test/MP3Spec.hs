@@ -128,6 +128,11 @@ spec = parallel $ do
     prop "calculates the duration of all the frames" $ \frames ->
       dfBytes frames ~> mp3Parser `parsesDuration` dfDuration frames
 
+    describe "failed end-of-file" $ do
+      prop "contains description" $ \(ValidMP3Frame frame) -> do
+        let junk = "\0 \xa0\0\xff\xfb"
+        (frame <> junk) ~> mp3Parser `shouldFailWithErrorContaining` "Expected end-of-file"
+
     describe "ID3 support" $ do
       prop "skips ID3 v2 tag before all frames" $ \frames ->
         forAll (resize 12 arbitrary) $ \id3Tag ->

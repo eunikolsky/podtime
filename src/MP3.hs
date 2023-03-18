@@ -32,7 +32,7 @@ mp3Parser = do
     skipPostID3Padding
   samplingRates <- A.many1 frameParser
   _ <- optional ID3V1.id3Parser
-  A.endOfInput
+  A.endOfInput <?> "Expected end-of-file"
   pure . sum $ frameDuration <$> samplingRates
 
 frameDuration :: SamplingRate -> AudioDuration
