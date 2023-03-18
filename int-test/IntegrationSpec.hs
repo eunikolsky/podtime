@@ -16,12 +16,12 @@ main = do
   episodes <- findEpisodes
 
   let config = defaultConfig { configFormatter = Just successFormatter }
-  hspecWith config $ spec episodes
+  hspecWith config . parallel $ spec episodes
 
 spec :: Episodes -> Spec
 spec (Episodes baseDir mp3s) =
   describe "mp3Parser" $ do
-    forM_ (take 3 mp3s) $ \mp3 ->
+    forM_ mp3s $ \mp3 ->
       it ("parses " <> ushow mp3) $ do
         contents <- B.readFile $ baseDir </> mp3
         mp3Parser `shouldSucceedOn` contents
