@@ -34,7 +34,7 @@ mp3Parser = do
   samplingRates <- A.many1 frameParser
   _ <- optional ID3V1.id3Parser
   pos <- getPos
-  A.endOfInput <?> "Expected end-of-file at byte " <> show pos
+  A.endOfInput <?> printf "Expected end-of-file at byte %#x (%u)" pos pos
   pure . sum $ frameDuration <$> samplingRates
 
 frameDuration :: SamplingRate -> AudioDuration

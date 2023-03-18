@@ -13,6 +13,7 @@ import Domain.MP3HeaderTypes
 import Domain.MPEGHeaderTypes
 import ID3V1ValidTag qualified as ID3V1
 import MP3
+import Numeric
 import Prelude hiding (pred)
 import Test.Hspec
 import Test.Hspec.Attoparsec
@@ -136,6 +137,10 @@ spec = parallel $ do
 
       prop "contains position" $ \(ValidMP3Frame frame) -> do
         let position = show $ BS.length frame
+        (frame <> junk) ~> mp3Parser `shouldFailWithErrorContaining` position
+
+      prop "contains position in hex" $ \(ValidMP3Frame frame) -> do
+        let position = "0x" <> showHex (BS.length frame) ""
         (frame <> junk) ~> mp3Parser `shouldFailWithErrorContaining` position
 
     describe "ID3 support" $ do
