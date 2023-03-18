@@ -24,8 +24,11 @@ instance Show AudioDuration where
 -- after or between them) and returns the audio duration.
 mp3Parser :: Parser AudioDuration
 mp3Parser = do
-  _ <- optional id3Parser
-  skipPostID3Padding
+  _ <- optional $ do
+    id3Parser
+    -- even though this padding is only skipped if it's after ID3, it's
+    -- technically not a part of it, that's why it's not defined in `id3Parser`
+    skipPostID3Padding
   samplingRates <- A.many1 frameParser
   A.endOfInput
   pure . sum $ frameDuration <$> samplingRates

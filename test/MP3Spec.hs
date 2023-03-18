@@ -108,6 +108,11 @@ spec = parallel $ do
         -- it's highly unlikely that `junk` will contain a valid MP3 frame
         mp3Parser `shouldFailOn` (junk <> validMP3FramesBytes frames)
 
+    -- this test was discovered because previous test failed
+    -- "after 88 tests and 7 shrinks" with seed 673344435!
+    prop "fails on nulls before first frame" $ \frames (Positive nullSize) ->
+      mp3Parser `shouldFailOn` (BS.replicate nullSize 0 <> validMP3FramesBytes frames)
+
     prop "fails on junk after last frame" $ \frames junk ->
       not (BS.null junk) ==>
         -- it's highly unlikely that `junk` will contain a valid MP3 frame
