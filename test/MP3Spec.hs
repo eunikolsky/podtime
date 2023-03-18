@@ -138,6 +138,11 @@ spec = parallel $ do
           let padding = BS.replicate paddingSize 0
           mp3Parser `shouldSucceedOn` (sampleID3V23Tag <> padding <> frame)
 
+      prop "skips post-ID3 space byte"
+        . forAll (genFrame $ MP3FrameSettings (BRValid VBV128) SR44100 NoPadding) $ \frame -> do
+          let padding = " "
+          mp3Parser `shouldSucceedOn` (sampleID3V23Tag <> padding <> frame)
+
       prop "skips ID3 v1 tag after all frames" $ \frames (ID3V1.ValidTag id3Tag) ->
         mp3Parser `shouldSucceedOn` (validMP3FramesBytes frames <> id3Tag)
 

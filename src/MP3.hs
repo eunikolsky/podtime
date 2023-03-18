@@ -39,16 +39,18 @@ frameDuration :: SamplingRate -> AudioDuration
 frameDuration = AudioDuration . (samplesPerFrame /) . samplingRateHz
   where samplesPerFrame = 1152
 
--- | Skips null bytes that may be present between the end of the ID3 tag and
--- the first frame. These bytes are _not_ tracked by the tag size (in the tag
--- header); I couldn't find posts online explaining this issue. `mp3diags`
--- agrees with me and shows them as an "unknown stream".
+-- | Skips stray bytes that may be present between the end of the ID3 tag and
+-- the first frame:
+-- * (at least) two episodes of "Cold War Conversations" have 10 null bytes, but
+-- it should be safe to skip any number of them because an MP3 frame should
+-- start with `0xff` anyway;
+-- * multiple "Reply All" and "Darknet Diaries" episodes have a single space
+-- character.
 --
--- Two episodes of "Cold War Conversations" had 10 such bytes, but it should be
--- safe to skip any number of them because an MP3 frame should start with `0xff`
--- anyway.
+-- These bytes are outside of the tag size (in the tag header); I couldn't find
+-- posts online explaining this issue. `mp3diags` shows them as an "unknown stream".
 skipPostID3Padding :: Parser ()
-skipPostID3Padding = A.skipWhile (== 0)
+skipPostID3Padding = A.skip (== 0x20) <|> A.skipWhile (== 0)
 
 -- | Parses a single MP3 frame and returns its sampling rate.
 frameParser :: Parser SamplingRate
