@@ -84,7 +84,7 @@ test-suite unit-test
   other-modules:
       MP3Spec
     , ID3Spec, ID3V1Spec
-    , TestCommon, AnySizedTag
+    , TestCommon, AnySizedTag, ID3V1ValidTag
     , Domain.FrameSync, Domain.ID3Tag
     , Domain.MP3HeaderTypes, Domain.MPEGHeaderTypes
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N

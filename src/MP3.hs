@@ -10,7 +10,8 @@ import Data.Attoparsec.ByteString ((<?>), Parser)
 import Data.Attoparsec.ByteString qualified as A
 import Data.Bits
 import Data.Word
-import ID3
+import ID3 qualified as ID3V2
+import ID3V1 qualified
 import Text.Printf
 
 -- | Duration of an MP3 file, in seconds.
@@ -25,11 +26,12 @@ instance Show AudioDuration where
 mp3Parser :: Parser AudioDuration
 mp3Parser = do
   _ <- optional $ do
-    id3Parser
+    ID3V2.id3Parser
     -- even though this padding is only skipped if it's after ID3, it's
     -- technically not a part of it, that's why it's not defined in `id3Parser`
     skipPostID3Padding
   samplingRates <- A.many1 frameParser
+  _ <- optional ID3V1.id3Parser
   A.endOfInput
   pure . sum $ frameDuration <$> samplingRates
 
