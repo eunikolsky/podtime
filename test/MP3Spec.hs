@@ -148,7 +148,7 @@ spec = parallel $ do
         -- however attoparsec backtracks to the beginning and starts parsing the
         -- input as an MP3 frame, which produces a different error message
         -- https://stackoverflow.com/questions/62586114/why-does-attoparsec-need-manytill-if-it-backtracks/62601398#62601398
-        let tag = mkID3Tag $ defaultID3TagSettings { idsVersion = "\x02\x00" }
+        let tag = mkID3Tag $ defaultID3TagSettings { idsVersion = "\x05\x00" }
         tag ~> mp3Parser `shouldFailWithErrorContaining` "Unsupported ID3 version"
 
 -- | Checks that the parsed duration equals to the expected duration with the

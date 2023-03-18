@@ -22,6 +22,9 @@ spec = parallel $ do
     it "parses a sample ID3 v2.3 tag" $ do
       id3Parser `shouldSucceedOn` sampleID3V23Tag
 
+    it "parses a sample ID3 v2.2 tag" $ do
+      id3Parser `shouldSucceedOn` sampleID3V22Tag
+
     prop "fails to parse tag with invalid ID3 identifier"
       . forAll genTagWithInvalidID3 $ \tag ->
         id3Parser `shouldFailOn` tag
@@ -51,11 +54,11 @@ genTagWithInvalidID3 = do
   identifier <- vectorOf 3 arbitrary
   pure . mkID3Tag $ defaultID3TagSettings { idsIdentifier = BS.pack identifier }
 
--- | Generates an ID3 tag with an arbitrary, non-2.4 and non-2.3 version.
+-- | Generates an ID3 tag with an arbitrary, non-2.4, non-2.3 and non-2.2 version.
 genTagWithUnsupportedVersion :: Gen ByteString
 genTagWithUnsupportedVersion = do
   version <- vectorOf 2 arbitrary
-  if version == [4, 0] || version == [3, 0]
+  if version == [4, 0] || version == [3, 0] || version == [2, 0]
     then discard
     else pure . mkID3Tag $ defaultID3TagSettings { idsVersion = BS.pack version }
 
