@@ -3,21 +3,25 @@ module IntegrationSpec (main) where
 import Control.Monad
 import Data.ByteString qualified as B
 import MP3
+import SuccessFormatter
 import System.Directory
 import System.FilePath
 import Test.Hspec
 import Test.Hspec.Attoparsec
+import Test.Hspec.Core.Runner
 import Text.Show.Unicode
 
 main :: IO ()
 main = do
   episodes <- findEpisodes
-  hspec $ spec episodes
+
+  let config = defaultConfig { configFormatter = Just successFormatter }
+  hspecWith config . parallel $ spec episodes
 
 spec :: Episodes -> Spec
 spec (Episodes baseDir mp3s) =
   describe "mp3Parser" $ do
-    forM_ (take 3 mp3s) $ \mp3 ->
+    forM_ mp3s $ \mp3 ->
       it ("parses " <> ushow mp3) $ do
         contents <- B.readFile $ baseDir </> mp3
         mp3Parser `shouldSucceedOn` contents

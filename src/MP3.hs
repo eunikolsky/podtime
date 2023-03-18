@@ -10,7 +10,8 @@ import Data.Attoparsec.ByteString ((<?>), Parser)
 import Data.Attoparsec.ByteString qualified as A
 import Data.Bits
 import Data.Word
-import ID3
+import ID3 qualified as ID3V2
+import ID3V1 qualified
 import Text.Printf
 
 -- | Duration of an MP3 file, in seconds.
@@ -24,14 +25,30 @@ instance Show AudioDuration where
 -- after or between them) and returns the audio duration.
 mp3Parser :: Parser AudioDuration
 mp3Parser = do
-  _ <- optional id3Parser
+  _ <- optional $ do
+    ID3V2.id3Parser
+    -- even though this padding is only skipped if it's after ID3, it's
+    -- technically not a part of it, that's why it's not defined in `id3Parser`
+    skipPostID3Padding
   samplingRates <- A.many1 frameParser
+  _ <- optional ID3V1.id3Parser
   A.endOfInput
   pure . sum $ frameDuration <$> samplingRates
 
 frameDuration :: SamplingRate -> AudioDuration
 frameDuration = AudioDuration . (samplesPerFrame /) . samplingRateHz
   where samplesPerFrame = 1152
+
+-- | Skips null bytes that may be present between the end of the ID3 tag and
+-- the first frame. These bytes are _not_ tracked by the tag size (in the tag
+-- header); I couldn't find posts online explaining this issue. `mp3diags`
+-- agrees with me and shows them as an "unknown stream".
+--
+-- Two episodes of "Cold War Conversations" had 10 such bytes, but it should be
+-- safe to skip any number of them because an MP3 frame should start with `0xff`
+-- anyway.
+skipPostID3Padding :: Parser ()
+skipPostID3Padding = A.skipWhile (== 0)
 
 -- | Parses a single MP3 frame and returns its sampling rate.
 frameParser :: Parser SamplingRate

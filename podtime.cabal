@@ -51,6 +51,7 @@ library
   hs-source-dirs:      src
   exposed-modules:
       ID3
+    , ID3V1
     , MP3
     , MP3Original
   build-depends:
@@ -82,8 +83,8 @@ test-suite unit-test
   main-is:             Spec.hs
   other-modules:
       MP3Spec
-    , ID3Spec
-    , TestCommon, AnySizedTag
+    , ID3Spec, ID3V1Spec
+    , TestCommon, AnySizedTag, ID3V1ValidTag
     , Domain.FrameSync, Domain.ID3Tag
     , Domain.MP3HeaderTypes, Domain.MPEGHeaderTypes
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
@@ -104,6 +105,8 @@ test-suite integration-test
   -- very weird, but this `main-is` is not enough
   -- https://stackoverflow.com/questions/50659327/stack-build-results-in-output-was-redirected-with-o-but-no-output-will-be-gen/50659706#50659706
   main-is:             IntegrationSpec.hs
+  other-modules:
+      SuccessFormatter
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
                        -main-is IntegrationSpec
   build-depends:
@@ -112,5 +115,6 @@ test-suite integration-test
     , filepath
     , hspec
     , hspec-attoparsec
+    , hspec-core
     , podtime
     , unicode-show

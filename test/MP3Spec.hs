@@ -2,16 +2,16 @@ module MP3Spec (spec) where
 
 import AnySizedTag
 import Control.Monad
-import Data.Attoparsec.ByteString (Parser)
-import Data.Attoparsec.ByteString qualified as A
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Foldable
 import Data.Map.Strict qualified as M
 import Data.Maybe
 import Domain.FrameSync
+import Domain.ID3Tag
 import Domain.MP3HeaderTypes
 import Domain.MPEGHeaderTypes
+import ID3V1ValidTag qualified as ID3V1
 import MP3
 import Prelude hiding (pred)
 import Test.Hspec
@@ -107,6 +107,11 @@ spec = parallel $ do
         -- it's highly unlikely that `junk` will contain a valid MP3 frame
         mp3Parser `shouldFailOn` (junk <> validMP3FramesBytes frames)
 
+    -- this test was discovered because previous test failed
+    -- "after 88 tests and 7 shrinks" with seed 673344435!
+    prop "fails on nulls before first frame" $ \frames (Positive nullSize) ->
+      mp3Parser `shouldFailOn` (BS.replicate nullSize 0 <> validMP3FramesBytes frames)
+
     prop "fails on junk after last frame" $ \frames junk ->
       not (BS.null junk) ==>
         -- it's highly unlikely that `junk` will contain a valid MP3 frame
@@ -123,9 +128,18 @@ spec = parallel $ do
     prop "calculates the duration of all the frames" $ \frames ->
       dfBytes frames ~> mp3Parser `parsesDuration` dfDuration frames
 
-    prop "parses ID3 tag before all frames" $ \frames ->
-      forAll (resize 12 arbitrary) $ \id3Tag ->
-        mp3Parser `shouldSucceedOn` (astBytes id3Tag <> validMP3FramesBytes frames)
+    describe "ID3 support" $ do
+      prop "skips ID3 v2 tag before all frames" $ \frames ->
+        forAll (resize 12 arbitrary) $ \id3Tag ->
+          mp3Parser `shouldSucceedOn` (astBytes id3Tag <> validMP3FramesBytes frames)
+
+      prop "skips post-ID3 null padding bytes" $ \paddingSize ->
+        forAll (genFrame $ MP3FrameSettings (BRValid VBV128) SR44100 NoPadding) $ \frame -> do
+          let padding = BS.replicate paddingSize 0
+          mp3Parser `shouldSucceedOn` (sampleID3V23Tag <> padding <> frame)
+
+      prop "skips ID3 v1 tag after all frames" $ \frames (ID3V1.ValidTag id3Tag) ->
+        mp3Parser `shouldSucceedOn` (validMP3FramesBytes frames <> id3Tag)
 
 -- | Checks that the parsed duration equals to the expected duration with the
 -- precision of `1e-5`.
@@ -217,10 +231,6 @@ instance Arbitrary DurationFrames where
         let settings = MP3FrameSettings (BRValid bitrate) samplingRate padding
         bytes <- genFrame settings
         pure $ MP3Frame (MP3FrameSamplingRateSettings settings) bytes
-
--- | Parser combinator to make sure the entire input is consumed.
-complete :: Parser a -> Parser a
-complete = (<* A.endOfInput)
 
 standardMP3Settings :: MP3FrameSettings
 standardMP3Settings = MP3FrameSettings (BRValid VBV128) SR44100 NoPadding

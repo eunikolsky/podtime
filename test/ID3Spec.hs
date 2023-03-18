@@ -1,7 +1,6 @@
 module ID3Spec (spec) where
 
 import AnySizedTag
-import Data.Attoparsec.ByteString qualified as A
 import Data.Bits
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
@@ -39,17 +38,11 @@ spec = parallel $ do
     -- ~8 seconds to test 100 cases, which is too slow for fast feedback
     modifyMaxSuccess (`div` 10) .
       prop "consumes the entire contents" $ \arbitrarySizedTag ->
-        (id3Parser <* A.endOfInput) `shouldSucceedOn` astBytes arbitrarySizedTag
+        complete id3Parser `shouldSucceedOn` astBytes arbitrarySizedTag
 
     prop "fails to parse incorrect synchsafe size"
       . forAll genHeaderWithIncorrectSize $ \header ->
         header ~> id3Parser `shouldFailWithErrorContaining` "Incorrect size bytes"
-
-sampleID3Tag :: ByteString
-sampleID3Tag = mkID3Tag defaultID3TagSettings
-
-sampleID3V23Tag :: ByteString
-sampleID3V23Tag = mkID3Tag $ defaultID3TagSettings { idsVersion = "\x03\x00" }
 
 -- | Generates an ID3 v2.4 tag where the identifier "ID3" is replaced with arbitrary bytes.
 genTagWithInvalidID3 :: Gen ByteString
