@@ -3,16 +3,20 @@ module IntegrationSpec (main) where
 import Control.Monad
 import Data.ByteString qualified as B
 import MP3
+import SuccessFormatter
 import System.Directory
 import System.FilePath
 import Test.Hspec
 import Test.Hspec.Attoparsec
+import Test.Hspec.Core.Runner
 import Text.Show.Unicode
 
 main :: IO ()
 main = do
   episodes <- findEpisodes
-  hspec $ spec episodes
+
+  let config = defaultConfig { configFormatter = Just successFormatter }
+  hspecWith config $ spec episodes
 
 spec :: Episodes -> Spec
 spec (Episodes baseDir mp3s) =
