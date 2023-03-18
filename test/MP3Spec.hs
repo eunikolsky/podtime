@@ -10,6 +10,7 @@ import Data.Foldable
 import Data.Map.Strict qualified as M
 import Data.Maybe
 import Domain.FrameSync
+import Domain.ID3Tag
 import Domain.MP3HeaderTypes
 import Domain.MPEGHeaderTypes
 import MP3
@@ -123,9 +124,15 @@ spec = parallel $ do
     prop "calculates the duration of all the frames" $ \frames ->
       dfBytes frames ~> mp3Parser `parsesDuration` dfDuration frames
 
-    prop "parses ID3 tag before all frames" $ \frames ->
-      forAll (resize 12 arbitrary) $ \id3Tag ->
-        mp3Parser `shouldSucceedOn` (astBytes id3Tag <> validMP3FramesBytes frames)
+    describe "ID3 support" $ do
+      prop "parses ID3 tag before all frames" $ \frames ->
+        forAll (resize 12 arbitrary) $ \id3Tag ->
+          mp3Parser `shouldSucceedOn` (astBytes id3Tag <> validMP3FramesBytes frames)
+
+      prop "skips post-ID3 null padding bytes" $ \paddingSize ->
+        forAll (genFrame $ MP3FrameSettings (BRValid VBV128) SR44100 NoPadding) $ \frame -> do
+          let padding = BS.replicate paddingSize 0
+          mp3Parser `shouldSucceedOn` (sampleID3V23Tag <> padding <> frame)
 
 -- | Checks that the parsed duration equals to the expected duration with the
 -- precision of `1e-5`.

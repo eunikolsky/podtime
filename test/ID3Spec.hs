@@ -45,12 +45,6 @@ spec = parallel $ do
       . forAll genHeaderWithIncorrectSize $ \header ->
         header ~> id3Parser `shouldFailWithErrorContaining` "Incorrect size bytes"
 
-sampleID3Tag :: ByteString
-sampleID3Tag = mkID3Tag defaultID3TagSettings
-
-sampleID3V23Tag :: ByteString
-sampleID3V23Tag = mkID3Tag $ defaultID3TagSettings { idsVersion = "\x03\x00" }
-
 -- | Generates an ID3 v2.4 tag where the identifier "ID3" is replaced with arbitrary bytes.
 genTagWithInvalidID3 :: Gen ByteString
 genTagWithInvalidID3 = do

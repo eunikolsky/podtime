@@ -2,6 +2,8 @@ module Domain.ID3Tag
   ( ID3TagSettings(..)
   , defaultID3TagSettings
   , mkID3Tag
+  , sampleID3Tag
+  , sampleID3V23Tag
   , toSynchsafe
   ) where
 
@@ -23,6 +25,12 @@ data ID3TagSettings = ID3TagSettings
 
 defaultID3TagSettings :: ID3TagSettings
 defaultID3TagSettings = ID3TagSettings "ID3" "\x04\x00" 0 (toSynchsafe 1) "\x00"
+
+sampleID3Tag :: ByteString
+sampleID3Tag = mkID3Tag defaultID3TagSettings
+
+sampleID3V23Tag :: ByteString
+sampleID3V23Tag = mkID3Tag $ defaultID3TagSettings { idsVersion = "\x03\x00" }
 
 mkID3Tag :: ID3TagSettings -> ByteString
 mkID3Tag ids = mconcat [idsIdentifier ids, idsVersion ids, flags, idsSize ids, idsContents ids]
