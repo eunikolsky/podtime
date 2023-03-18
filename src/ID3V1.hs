@@ -8,4 +8,4 @@ import Data.Attoparsec.ByteString qualified as A
 
 -- | Parses the ID3 v1 tag.
 id3Parser :: Parser ()
-id3Parser = void $ A.string "TAG"
+id3Parser = void $ A.string "TAG" >> A.takeLazyByteString
