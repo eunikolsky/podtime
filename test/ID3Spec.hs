@@ -1,7 +1,6 @@
 module ID3Spec (spec) where
 
 import AnySizedTag
-import Data.Attoparsec.ByteString qualified as A
 import Data.Bits
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
@@ -39,7 +38,7 @@ spec = parallel $ do
     -- ~8 seconds to test 100 cases, which is too slow for fast feedback
     modifyMaxSuccess (`div` 10) .
       prop "consumes the entire contents" $ \arbitrarySizedTag ->
-        (id3Parser <* A.endOfInput) `shouldSucceedOn` astBytes arbitrarySizedTag
+        complete id3Parser `shouldSucceedOn` astBytes arbitrarySizedTag
 
     prop "fails to parse incorrect synchsafe size"
       . forAll genHeaderWithIncorrectSize $ \header ->

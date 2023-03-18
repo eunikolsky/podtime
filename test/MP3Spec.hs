@@ -2,8 +2,6 @@ module MP3Spec (spec) where
 
 import AnySizedTag
 import Control.Monad
-import Data.Attoparsec.ByteString (Parser)
-import Data.Attoparsec.ByteString qualified as A
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Foldable
@@ -229,10 +227,6 @@ instance Arbitrary DurationFrames where
         let settings = MP3FrameSettings (BRValid bitrate) samplingRate padding
         bytes <- genFrame settings
         pure $ MP3Frame (MP3FrameSamplingRateSettings settings) bytes
-
--- | Parser combinator to make sure the entire input is consumed.
-complete :: Parser a -> Parser a
-complete = (<* A.endOfInput)
 
 standardMP3Settings :: MP3FrameSettings
 standardMP3Settings = MP3FrameSettings (BRValid VBV128) SR44100 NoPadding

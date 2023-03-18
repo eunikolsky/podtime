@@ -1,6 +1,5 @@
 module ID3V1Spec (spec) where
 
-import Data.Attoparsec.ByteString qualified as A
 import Data.ByteString
 import Data.ByteString qualified as BS
 import ID3V1
@@ -8,13 +7,13 @@ import Test.Hspec
 import Test.Hspec.Attoparsec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck
+import TestCommon
 
 spec :: Spec
 spec = parallel $ do
   describe "id3Parser" $ do
     prop "consumes the entire ID3 v1 tag" $ \(ValidTag tag) ->
-      -- TODO extract the `complete` combinator
-      (id3Parser <* A.endOfInput) `shouldSucceedOn` tag
+      complete id3Parser `shouldSucceedOn` tag
 
     prop "fails to parse tag with invalid identifier" $ \(InvalidTag tag) ->
       id3Parser `shouldFailOn` tag
