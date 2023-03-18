@@ -141,6 +141,16 @@ spec = parallel $ do
       prop "skips ID3 v1 tag after all frames" $ \frames (ID3V1.ValidTag id3Tag) ->
         mp3Parser `shouldSucceedOn` (validMP3FramesBytes frames <> id3Tag)
 
+      it "does fail with correct message on unsupported ID3 version" $ do
+        pendingWith "can't find a way not to backtrack in attoparsec"
+        -- I'd expect `mp3Parser` to fail on the ID3 version from the (optional)
+        -- inner `id3Parser` because it already parsed "ID3" at the beginning;
+        -- however attoparsec backtracks to the beginning and starts parsing the
+        -- input as an MP3 frame, which produces a different error message
+        -- https://stackoverflow.com/questions/62586114/why-does-attoparsec-need-manytill-if-it-backtracks/62601398#62601398
+        let tag = mkID3Tag $ defaultID3TagSettings { idsVersion = "\x02\x00" }
+        tag ~> mp3Parser `shouldFailWithErrorContaining` "Unsupported ID3 version"
+
 -- | Checks that the parsed duration equals to the expected duration with the
 -- precision of `1e-5`.
 parsesDuration :: Either String AudioDuration -> AudioDuration -> Expectation
