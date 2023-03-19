@@ -4,6 +4,7 @@ import AnySizedTag
 import Control.Monad
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
+import Data.ByteString.Builder qualified as BSB
 import Data.Foldable
 import Data.Map.Strict qualified as M
 import Data.Maybe
@@ -13,6 +14,7 @@ import Domain.MP3HeaderTypes
 import Domain.MPEGHeaderTypes
 import ID3V1ValidTag qualified as ID3V1
 import MP3
+import Numeric
 import Prelude hiding (pred)
 import Test.Hspec
 import Test.Hspec.Attoparsec
@@ -127,6 +129,29 @@ spec = parallel $ do
 
     prop "calculates the duration of all the frames" $ \frames ->
       dfBytes frames ~> mp3Parser `parsesDuration` dfDuration frames
+
+    describe "failed end-of-file" $ do
+      let junk = "\0 \xff\xfb\x50\xc4"
+
+      prop "contains description" $ \(ValidMP3Frame frame) ->
+        (frame <> junk) ~> mp3Parser `shouldFailWithErrorContaining` "Expected end-of-file"
+
+      prop "contains position" $ \(ValidMP3Frame frame) -> do
+        let position = show $ BS.length frame
+        (frame <> junk) ~> mp3Parser `shouldFailWithErrorContaining` position
+
+      prop "contains position in hex" $ \(ValidMP3Frame frame) -> do
+        let position = "0x" <> showHex (BS.length frame) ""
+        (frame <> junk) ~> mp3Parser `shouldFailWithErrorContaining` position
+
+      prop "contains next 4 bytes" $ \(ValidMP3Frame frame) arbJunk ->
+        BS.length arbJunk >= 4 ==> do
+          let dump = show . foldMap' BSB.word8HexFixed . BS.unpack $ BS.take 4 arbJunk
+          (frame <> arbJunk) ~> mp3Parser `shouldFailWithErrorContaining` dump
+
+      prop "contains next 1–3 bytes" $ \(ValidMP3Frame frame) (ShortJunk arbJunk) -> do
+        let dump = show . foldMap' BSB.word8HexFixed . BS.unpack $ arbJunk
+        (frame <> arbJunk) ~> mp3Parser `shouldFailWithErrorContaining` dump
 
     describe "ID3 support" $ do
       prop "skips ID3 v2 tag before all frames" $ \frames ->
@@ -276,3 +301,10 @@ genHeaderWithInvalidFrameSync = do
   -- `chooseBoundedIntegral` is faster than `choose`
   frameSync <- chooseBoundedIntegral (0, 0b1111_1111_111 - 1)
   pure . mkMPEGHeader (mkFrameSync frameSync) NotProtected . MP3 $ standardMP3Settings
+
+-- | 1–3 arbitrary bytes. It's used to test hex dump at expected EOF.
+newtype ShortJunk = ShortJunk ByteString
+  deriving stock (Show)
+
+instance Arbitrary ShortJunk where
+  arbitrary = ShortJunk . BS.pack <$> (flip vectorOf arbitrary =<< chooseInt (1, 3))

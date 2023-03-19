@@ -4,11 +4,14 @@ module MP3
   , mp3Parser
   ) where
 
+import AttoparsecExtra
 import Control.Applicative
 import Control.Monad
 import Data.Attoparsec.ByteString ((<?>), Parser)
 import Data.Attoparsec.ByteString qualified as A
+import Data.Attoparsec.Combinator qualified as A (lookAhead)
 import Data.Bits
+import Data.ByteString.Builder qualified as BSB
 import Data.Word
 import ID3 qualified as ID3V2
 import ID3V1 qualified
@@ -32,12 +35,26 @@ mp3Parser = do
     skipPostID3Padding
   samplingRates <- A.many1 frameParser
   _ <- optional ID3V1.id3Parser
-  A.endOfInput
+  endOfInput
   pure . sum $ frameDuration <$> samplingRates
 
 frameDuration :: SamplingRate -> AudioDuration
 frameDuration = AudioDuration . (samplesPerFrame /) . samplingRateHz
   where samplesPerFrame = 1152
+
+-- | Expects an end-of-input. If it fails [1], there is a failure message
+-- containing the current position and next 4 bytes — this helps with parser
+-- debugging and improvement.
+--
+-- [1] which may happen when there is junk in between mp3 frames, so the parser
+-- takes all the frames before the junk and then expects an EOF
+endOfInput :: Parser ()
+endOfInput = do
+  pos <- getPos
+  nextBytes <- A.lookAhead $ takeUpTo 4
+  let restDump = show . BSB.byteStringHex $ nextBytes
+  A.endOfInput <?>
+    printf "Expected end-of-file at byte %#x (%u), but got %s" pos pos restDump
 
 -- | Skips stray bytes that may be present between the end of the ID3 tag and
 -- the first frame:
