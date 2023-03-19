@@ -9,7 +9,9 @@ import Control.Applicative
 import Control.Monad
 import Data.Attoparsec.ByteString ((<?>), Parser)
 import Data.Attoparsec.ByteString qualified as A
+import Data.Attoparsec.Combinator qualified as A (lookAhead)
 import Data.Bits
+import Data.ByteString qualified as BS
 import Data.ByteString.Builder qualified as BSB
 import Data.Word
 import ID3 qualified as ID3V2
@@ -42,7 +44,7 @@ frameDuration = AudioDuration . (samplesPerFrame /) . samplingRateHz
   where samplesPerFrame = 1152
 
 -- | Expects an end-of-input. If it fails [1], there is a failure message
--- containing the current position and next byte — this helps with parser
+-- containing the current position and next 4 bytes — this helps with parser
 -- debugging and improvement.
 --
 -- [1] which may happen when there is junk in between mp3 frames, so the parser
@@ -50,8 +52,8 @@ frameDuration = AudioDuration . (samplesPerFrame /) . samplingRateHz
 endOfInput :: Parser ()
 endOfInput = do
   pos <- getPos
-  nextByte <- A.peekWord8
-  let restDump = maybe "" (show . BSB.word8HexFixed) nextByte
+  nextBytes <- A.option [] . A.lookAhead $ A.count 4 A.anyWord8
+  let restDump = show . BSB.byteStringHex . BS.pack $ nextBytes
   A.endOfInput <?>
     printf "Expected end-of-file at byte %#x (%u), but got %s" pos pos restDump
 
