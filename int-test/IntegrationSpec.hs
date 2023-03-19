@@ -15,7 +15,10 @@ main :: IO ()
 main = do
   episodes <- findEpisodes
 
-  let config = defaultConfig { configFormatter = Just successFormatter }
+  let config = defaultConfig
+        { configPrintSlowItems = Just 5
+        , configFormatter = Just successFormatter
+        }
   hspecWith config . parallel $ spec episodes
 
 spec :: Episodes -> Spec
