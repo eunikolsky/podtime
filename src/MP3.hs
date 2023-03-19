@@ -11,7 +11,6 @@ import Data.Attoparsec.ByteString ((<?>), Parser)
 import Data.Attoparsec.ByteString qualified as A
 import Data.Attoparsec.Combinator qualified as A (lookAhead)
 import Data.Bits
-import Data.ByteString qualified as BS
 import Data.ByteString.Builder qualified as BSB
 import Data.Word
 import ID3 qualified as ID3V2
@@ -52,8 +51,8 @@ frameDuration = AudioDuration . (samplesPerFrame /) . samplingRateHz
 endOfInput :: Parser ()
 endOfInput = do
   pos <- getPos
-  nextBytes <- A.option [] . A.lookAhead $ A.count 4 A.anyWord8
-  let restDump = show . BSB.byteStringHex . BS.pack $ nextBytes
+  nextBytes <- A.lookAhead $ takeUpTo 4
+  let restDump = show . BSB.byteStringHex $ nextBytes
   A.endOfInput <?>
     printf "Expected end-of-file at byte %#x (%u), but got %s" pos pos restDump
 

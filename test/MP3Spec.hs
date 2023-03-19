@@ -149,6 +149,10 @@ spec = parallel $ do
           let dump = show . foldMap' BSB.word8HexFixed . BS.unpack $ BS.take 4 arbJunk
           (frame <> arbJunk) ~> mp3Parser `shouldFailWithErrorContaining` dump
 
+      prop "contains next 1–3 bytes" $ \(ValidMP3Frame frame) (ShortJunk arbJunk) -> do
+        let dump = show . foldMap' BSB.word8HexFixed . BS.unpack $ arbJunk
+        (frame <> arbJunk) ~> mp3Parser `shouldFailWithErrorContaining` dump
+
     describe "ID3 support" $ do
       prop "skips ID3 v2 tag before all frames" $ \frames ->
         forAll (resize 12 arbitrary) $ \id3Tag ->
@@ -297,3 +301,10 @@ genHeaderWithInvalidFrameSync = do
   -- `chooseBoundedIntegral` is faster than `choose`
   frameSync <- chooseBoundedIntegral (0, 0b1111_1111_111 - 1)
   pure . mkMPEGHeader (mkFrameSync frameSync) NotProtected . MP3 $ standardMP3Settings
+
+-- | 1–3 arbitrary bytes. It's used to test hex dump at expected EOF.
+newtype ShortJunk = ShortJunk ByteString
+  deriving stock (Show)
+
+instance Arbitrary ShortJunk where
+  arbitrary = ShortJunk . BS.pack <$> (flip vectorOf arbitrary =<< chooseInt (1, 3))
