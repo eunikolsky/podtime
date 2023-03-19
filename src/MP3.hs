@@ -24,8 +24,15 @@ newtype AudioDuration = AudioDuration { getAudioDuration :: Float }
 instance Show AudioDuration where
   show (AudioDuration d) = show d <> " s"
 
--- | Parses an MP3 file (a sequence of MP3 frames without any junk before,
--- after or between them) and returns the audio duration.
+-- | Parses an MP3 file and returns the audio duration. An accepted MP3 file:
+--
+-- - optionally starts with an ID3 v2.{2,3,4} tag, which may be followed by
+-- a single space or a block of null bytes;
+--
+-- - consists of 1+ MP3 frames, where a frame may be followed by an optional
+-- null byte;
+--
+-- - optionally ends with an ID3 v1 tag.
 mp3Parser :: Parser AudioDuration
 mp3Parser = do
   _ <- optional $ do
