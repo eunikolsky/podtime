@@ -33,7 +33,10 @@ mp3Parser = do
     -- even though this padding is only skipped if it's after ID3, it's
     -- technically not a part of it, that's why it's not defined in `id3Parser`
     skipPostID3Padding
-  samplingRates <- A.many1 frameParser
+  -- parses a sequence of MP3 frames with a possible extra null byte after a
+  -- frame; several older episodes of "Accidental Tech Podcast" and
+  -- "Under the Radar" have this byte in addition to the already present padding
+  samplingRates <- A.many1 $ frameParser <* optional (A.word8 0)
   _ <- optional ID3V1.id3Parser
   endOfInput
   pure . sum $ frameDuration <$> samplingRates
