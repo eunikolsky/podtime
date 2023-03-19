@@ -208,10 +208,10 @@ newtype FramesWithMiddleJunk = FramesWithMiddleJunk ByteString
 
 instance Arbitrary FramesWithMiddleJunk where
   arbitrary = do
-    framesBefore <- listOf1 arbitrary
-    framesAfter <- listOf1 arbitrary
-    junk <- arbitrary
-    pure . FramesWithMiddleJunk . mconcat $ concat [framesBefore, [junk], framesAfter]
+    framesBefore <- validMP3FramesBytes <$> arbitrary
+    framesAfter <- validMP3FramesBytes <$> arbitrary
+    junk <- BS.pack <$> listOf1 arbitrary
+    pure . FramesWithMiddleJunk . mconcat $ [framesBefore, junk, framesAfter]
 
 -- | A wrapper for `MP3FrameSettings` that only prints its `SamplingRate` in `show`
 -- (because only that value is relevant to frame duration).
