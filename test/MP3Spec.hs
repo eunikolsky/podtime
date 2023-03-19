@@ -4,6 +4,7 @@ import AnySizedTag
 import Control.Monad
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
+import Data.ByteString.Builder qualified as BSB
 import Data.Foldable
 import Data.Map.Strict qualified as M
 import Data.Maybe
@@ -143,9 +144,10 @@ spec = parallel $ do
         let position = "0x" <> showHex (BS.length frame) ""
         (frame <> junk) ~> mp3Parser `shouldFailWithErrorContaining` position
 
-      prop "contains next 4 bytes" $ \(ValidMP3Frame frame) -> do
-        let dump = "0020fffb"
-        (frame <> junk) ~> mp3Parser `shouldFailWithErrorContaining` dump
+      prop "contains next 4 bytes" $ \(ValidMP3Frame frame) arbJunk ->
+        BS.length arbJunk >= 4 ==> do
+          let dump = show . foldMap' BSB.word8HexFixed . BS.unpack $ BS.take 4 arbJunk
+          (frame <> arbJunk) ~> mp3Parser `shouldFailWithErrorContaining` dump
 
     describe "ID3 support" $ do
       prop "skips ID3 v2 tag before all frames" $ \frames ->
