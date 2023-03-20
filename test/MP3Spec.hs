@@ -104,15 +104,13 @@ spec = parallel $ do
     prop "consumes all (valid) frames" $ \frames ->
       complete mp3Parser `shouldSucceedOn` validMP3FramesBytes frames
 
-    prop "fails on junk before first frame" $ \frames junk ->
-      not (BS.null junk) ==>
-        -- it's highly unlikely that `junk` will contain a valid MP3 frame
-        mp3Parser `shouldFailOn` (junk <> validMP3FramesBytes frames)
+    prop "skips junk before first frame" $ \frames (LeadingJunk junk) ->
+      mp3Parser `shouldSucceedOn` (junk <> validMP3FramesBytes frames)
 
-    -- this test was discovered because previous test failed
-    -- "after 88 tests and 7 shrinks" with seed 673344435!
-    prop "fails on nulls before first frame" $ \frames (Positive nullSize) ->
-      mp3Parser `shouldFailOn` (BS.replicate nullSize 0 <> validMP3FramesBytes frames)
+    -- FIXME test junk with valid frame header bytes
+    -- TODO skips bytes to ff
+    -- TODO duration with and without junk
+    -- TODO fails(?) on longer junk
 
     prop "fails on junk after last frame" $ \frames junk ->
       not (BS.null junk) && junk /= "\0" ==>
@@ -316,3 +314,17 @@ newtype ShortJunk = ShortJunk ByteString
 
 instance Arbitrary ShortJunk where
   arbitrary = ShortJunk . BS.pack <$> (flip vectorOf arbitrary =<< chooseInt (1, 3))
+
+-- | Arbitrary junk that is the ending part of a previous frame. It doesn't
+-- include a `0xff` byte in order not to confuse the frame parser.
+newtype LeadingJunk = LeadingJunk ByteString
+
+instance Show LeadingJunk where
+  show (LeadingJunk bs) = show $ BSB.byteString "LeadingJunk ("
+    <> BSB.intDec (BS.length bs) <> " bytes) "
+    <> BSB.byteStringHex bs
+
+instance Arbitrary LeadingJunk where
+  arbitrary = do
+    size <- chooseInt (1, 1440 - 1)
+    LeadingJunk . BS.pack <$> vectorOf size (chooseEnum (0, 254))

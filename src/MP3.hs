@@ -26,13 +26,20 @@ instance Show AudioDuration where
 
 -- | Parses an MP3 file and returns the audio duration. An accepted MP3 file:
 --
--- - optionally starts with an ID3 v2.{2,3,4} tag, which may be followed by
--- a single space or a block of null bytes;
+-- - optionally starts with:
+--   - an ID3 v2.{2,3,4} tag, which may be followed by a single space or a
+--   block of null bytes;
+--   - or a leftover from a previous frame [0];
 --
 -- - consists of 1+ MP3 frames, where a frame may be followed by an optional
 -- null byte;
 --
 -- - optionally ends with an ID3 v1 tag.
+--
+-- [0] This piece is junk that appears if you dump an internet MP3 stream
+-- connecting at an arbitrary point in time. In a valid MP3 stream, the junk
+-- must be shorter than the longest frame's size (1440 bytes). I don't think
+-- ID3 tags are present in such streams (ICY metadata can be used instead).
 mp3Parser :: Parser AudioDuration
 mp3Parser = do
   _ <- optional $ do
@@ -40,13 +47,25 @@ mp3Parser = do
     -- even though this padding is only skipped if it's after ID3, it's
     -- technically not a part of it, that's why it's not defined in `id3Parser`
     skipPostID3Padding
-  -- parses a sequence of MP3 frames with a possible extra null byte after a
-  -- frame; several older episodes of "Accidental Tech Podcast" and
-  -- "Under the Radar" have this byte in addition to the already present padding
-  samplingRates <- A.many1 $ frameParser <* optional (A.word8 0)
+
+  firstSamplingRate <- allowingPostNullByte parseFirstFrame
+  samplingRates <- A.many' $ allowingPostNullByte frameParser
+
   _ <- optional ID3V1.id3Parser
   endOfInput
-  pure . sum $ frameDuration <$> samplingRates
+  pure . sum $ frameDuration <$> firstSamplingRate : samplingRates
+
+-- | Combinator to allow an optional null byte after the given parser. It's used
+-- to parse MP3 frames with a possible extra null byte after a frame; several
+-- older episodes of "Accidental Tech Podcast" and "Under the Radar" have this
+-- byte in addition to the already present padding.
+allowingPostNullByte :: Parser a -> Parser a
+allowingPostNullByte = (<* optional (A.word8 0))
+
+-- | Parses first MP3 frame of a file skipping any leftovers from a previous
+-- frame.
+parseFirstFrame :: Parser SamplingRate
+parseFirstFrame = frameParser <|> (A.anyWord8 >> parseFirstFrame)
 
 frameDuration :: SamplingRate -> AudioDuration
 frameDuration = AudioDuration . (samplesPerFrame /) . samplingRateHz
