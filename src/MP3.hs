@@ -35,12 +35,15 @@ instance Show AudioDuration where
 -- - consists of 1+ MP3 frames, where a frame may be followed by an optional
 -- null byte;
 --
--- - optionally ends with an ID3 v1 tag.
+-- - optionally ends with:
+--   - an ID3 v1 tag;
+--   - or a piece of the next frame [0][2].
 --
--- [0] This piece is junk that appears if you dump an internet MP3 stream
--- connecting at an arbitrary point in time. In a valid MP3 stream, the junk
--- must be shorter than the longest frame's size (1440 bytes). I don't think
--- ID3 tags are present in such streams (ICY metadata can be used instead).
+-- [0] From parser's point of view, these pieces are junk. They appear when you
+-- dump an internet MP3 stream connecting at an arbitrary point in time. In a
+-- valid MP3 stream, the junk must be shorter than the longest frame's size
+-- (1440 bytes). I don't think ID3 tags are present in such streams (ICY
+-- metadata can be used instead).
 --
 -- [1] It can include bytes that look like a valid frame start (`fffb` + 2 bytes)
 -- and not be one. To validate a frame start, we have to read the possible frame
@@ -48,6 +51,15 @@ instance Show AudioDuration where
 -- very unlikely that the stream will have random `fffb`s at the correct
 -- spacings. That is, it makes sense to require two sequential valid frames to
 -- filter out junk correctly.
+--
+-- [2] I suppose if a stream ends successfully, the server (such as `icecast`)
+-- should send the complete last frame. However in case of a disconnect, you're
+-- likely to receive a partial frame. The parser expects to read a valid frame
+-- header and then any truncated data (if the frame isn't truncated, it was
+-- already parsed by the frame parsing loop above); if the junk doesn't start
+-- with a complete frame header (4 bytes), parsing fails; the parser could
+-- accept any junk, but then it would be too generic, could fail somewhere in the
+-- middle of a file and hide more specific errors.
 mp3Parser :: Parser AudioDuration
 mp3Parser = do
   _ <- optional $ do
@@ -59,7 +71,11 @@ mp3Parser = do
   firstSamplingRates <- allowingPostNullByte parseFirstFrames
   samplingRates <- A.many' $ allowingPostNullByte frameParser
 
-  _ <- optional ID3V1.id3Parser
+  ID3V1.id3Parser <|>
+    -- if we're here, all the sequential valid MP3 frames have been parsed and
+    -- there is no ID3 v1 tag, so try parsing the last, truncated frame if any;
+    -- it must start with a valid frame header, or the parser fails
+    (void . optional $ frameHeaderParser >> A.takeLazyByteString)
   endOfInput
   pure . sum $ frameDuration <$> firstSamplingRates <> samplingRates
 
@@ -128,9 +144,10 @@ endOfInput = do
 skipPostID3Padding :: Parser ()
 skipPostID3Padding = A.skip (== 0x20) <|> A.skipWhile (== 0)
 
--- | Parses a single MP3 frame and returns its sampling rate.
-frameParser :: Parser SamplingRate
-frameParser = do
+-- | Parses the header of an MP3 frame and returns its sampling rate and the
+-- number of bytes to read for this frame.
+frameHeaderParser :: Parser (SamplingRate, Int)
+frameHeaderParser = do
   [byte0, byte1, byte2, _] <- A.count 4 A.anyWord8 <?> "Incomplete frame header"
 
   frameSyncValidator (byte0, byte1)
@@ -144,6 +161,12 @@ frameParser = do
   let paddingSize = if testBit byte2 paddingBitIndex then 1 else 0
       contentsSize = frameSize bitrate samplingRate - 4 + paddingSize
 
+  pure (samplingRate, contentsSize)
+
+-- | Parses a single MP3 frame and returns its sampling rate.
+frameParser :: Parser SamplingRate
+frameParser = do
+  (samplingRate, contentsSize) <- frameHeaderParser
   _ <- A.take contentsSize
   pure samplingRate
 

@@ -128,8 +128,13 @@ spec = parallel $ do
         -- it's highly unlikely that `junk` will contain a valid MP3 frame
         mp3Parser `shouldFailOn` (validMP3FramesBytes frames <> junk)
 
-    prop "fails on junk between frames" $ \(FramesWithMiddleJunk bytes) ->
-      mp3Parser `shouldFailOn` bytes
+    prop "skips last, truncated frame" $ \(MP3WithTruncatedFrame frames lastFrame) ->
+      mp3Parser `shouldSucceedOn` (frames <> lastFrame)
+
+    -- FIXME fails(?) on long trailing junk
+
+    prop "fails on junk between frames" $ \(FramesWithMiddleJunk beforeFrames afterFrames junk) ->
+      mp3Parser `shouldFailOn` (beforeFrames <> junk <> afterFrames)
 
     prop "allows one null byte between frames" $ \(ValidMP3Frame frame0) (ValidMP3Frame frame1) ->
       mp3Parser `shouldSucceedOn` (frame0 <> "\0" <> frame1)
@@ -218,8 +223,8 @@ newtype ValidMP3Frames = ValidMP3Frames (NonEmptyList ValidMP3Frame)
 validMP3FramesBytes :: ValidMP3Frames -> ByteString
 validMP3FramesBytes (ValidMP3Frames (NonEmpty frames)) = mconcat $ validMP3FrameBytes <$> frames
 
-newtype FramesWithMiddleJunk = FramesWithMiddleJunk ByteString
-  deriving newtype (Show)
+data FramesWithMiddleJunk = FramesWithMiddleJunk ByteString ByteString ByteString
+  deriving stock (Show)
 
 instance Arbitrary FramesWithMiddleJunk where
   arbitrary = do
@@ -228,7 +233,12 @@ instance Arbitrary FramesWithMiddleJunk where
     junk <- BS.pack <$> listOf1 arbitrary
     if junk == "\0"
       then discard
-      else pure . FramesWithMiddleJunk . mconcat $ [framesBefore, junk, framesAfter]
+      else pure $ FramesWithMiddleJunk framesBefore framesAfter junk
+
+  shrink (FramesWithMiddleJunk beforeFrames afterFrames junk) = do
+    size <- shrink $ BS.length junk
+    guard $ size > 1
+    pure . FramesWithMiddleJunk beforeFrames afterFrames $ BS.take size junk
 
 -- | A wrapper for `MP3FrameSettings` that only prints its `SamplingRate` in `show`
 -- (because only that value is relevant to frame duration).
@@ -380,3 +390,21 @@ instance Arbitrary TooLongLeadingJunk where
     -- this keeps the invariant that the size is at least 1440 bytes
     guard $ size >= 1440
     pure . TooLongLeadingJunk $ BS.take size bs
+
+-- | 1+ valid frames with one truncated frame. The truncated frame always
+-- has at least its header.
+data MP3WithTruncatedFrame = MP3WithTruncatedFrame ByteString ByteString
+  deriving stock (Show)
+
+instance Arbitrary MP3WithTruncatedFrame where
+  arbitrary = do
+    validFrames <- arbitrary
+    frame <- validMP3FrameBytes <$> arbitrary
+    takeLength <- chooseInt (4, BS.length frame - 1)
+    let truncatedFrame = BS.take takeLength frame
+    pure $ MP3WithTruncatedFrame (validMP3FramesBytes validFrames) truncatedFrame
+
+  shrink (MP3WithTruncatedFrame frames truncatedFrame) = do
+    takeLength <- shrink $ BS.length truncatedFrame
+    guard $ takeLength >= 4
+    pure . MP3WithTruncatedFrame frames $ BS.take takeLength truncatedFrame
