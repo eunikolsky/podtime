@@ -12,6 +12,7 @@ import Data.Attoparsec.ByteString qualified as A
 import Data.Attoparsec.Combinator qualified as A (lookAhead)
 import Data.Bits
 import Data.ByteString.Builder qualified as BSB
+import Data.List (singleton)
 import Data.Word
 import ID3 qualified as ID3V2
 import ID3V1 qualified
@@ -29,7 +30,7 @@ instance Show AudioDuration where
 -- - optionally starts with:
 --   - an ID3 v2.{2,3,4} tag, which may be followed by a single space or a
 --   block of null bytes;
---   - or a leftover from a previous frame [0];
+--   - or a leftover from a previous frame [0][1];
 --
 -- - consists of 1+ MP3 frames, where a frame may be followed by an optional
 -- null byte;
@@ -40,6 +41,13 @@ instance Show AudioDuration where
 -- connecting at an arbitrary point in time. In a valid MP3 stream, the junk
 -- must be shorter than the longest frame's size (1440 bytes). I don't think
 -- ID3 tags are present in such streams (ICY metadata can be used instead).
+--
+-- [1] It can include bytes that look like a valid frame start (`fffb` + 2 bytes)
+-- and not be one. To validate a frame start, we have to read the possible frame
+-- and check whether the next frame is located right after this one because it is
+-- very unlikely that the stream will have random `fffb`s at the correct
+-- spacings. That is, it makes sense to require two sequential valid frames to
+-- filter out junk correctly.
 mp3Parser :: Parser AudioDuration
 mp3Parser = do
   _ <- optional $ do
@@ -48,12 +56,12 @@ mp3Parser = do
     -- technically not a part of it, that's why it's not defined in `id3Parser`
     skipPostID3Padding
 
-  firstSamplingRate <- allowingPostNullByte parseFirstFrame
+  firstSamplingRates <- allowingPostNullByte parseFirstFrames
   samplingRates <- A.many' $ allowingPostNullByte frameParser
 
   _ <- optional ID3V1.id3Parser
   endOfInput
-  pure . sum $ frameDuration <$> firstSamplingRate : samplingRates
+  pure . sum $ frameDuration <$> firstSamplingRates <> samplingRates
 
 -- | Combinator to allow an optional null byte after the given parser. It's used
 -- to parse MP3 frames with a possible extra null byte after a frame; several
@@ -62,10 +70,22 @@ mp3Parser = do
 allowingPostNullByte :: Parser a -> Parser a
 allowingPostNullByte = (<* optional (A.word8 0))
 
--- | Parses first MP3 frame of a file skipping any leftovers from a previous
--- frame.
-parseFirstFrame :: Parser SamplingRate
-parseFirstFrame = frameParser <|> (A.anyWord8 >> parseFirstFrame)
+-- | Parses first MP3 frames of a file skipping any leftovers from a previous
+-- frame. It can return either one frame (for valid MP3 files), or two frames
+-- (for MP3 stream dumps that don't start with a frame).
+parseFirstFrames :: Parser [SamplingRate]
+parseFirstFrames = (singleton <$> frameParser) <|> findFirstFrames
+  where
+    findFirstFrames = do
+      -- this skips a single byte to retry frames parsing from the next position
+      -- one byte skipping isn't very efficient and may or may not be slow;
+      -- however for a valid MP3 file, this junk is limited in size; an
+      -- alternative is to skip until a `0xff` byte, which is only a part of a
+      -- valid frame header, but that leaks lower-level details (of
+      -- `frameParser`) into this higher-level parser
+      -- TODO benchmark this and skip to `0xff` if necessary
+      void A.anyWord8
+      A.count 2 frameParser <|> findFirstFrames
 
 frameDuration :: SamplingRate -> AudioDuration
 frameDuration = AudioDuration . (samplesPerFrame /) . samplingRateHz
