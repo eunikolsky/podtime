@@ -104,15 +104,24 @@ spec = parallel $ do
     prop "consumes all (valid) frames" $ \frames ->
       complete mp3Parser `shouldSucceedOn` validMP3FramesBytes frames
 
-    prop "fails on junk before first frame" $ \frames junk ->
-      not (BS.null junk) ==>
-        -- it's highly unlikely that `junk` will contain a valid MP3 frame
-        mp3Parser `shouldFailOn` (junk <> validMP3FramesBytes frames)
+    prop "skips junk before first frame" $ \frame frames (LeadingJunkNoFF junk) ->
+      mp3Parser `shouldSucceedOn` (junk <> validMP3FrameBytes frame <> validMP3FramesBytes frames)
 
-    -- this test was discovered because previous test failed
-    -- "after 88 tests and 7 shrinks" with seed 673344435!
-    prop "fails on nulls before first frame" $ \frames (Positive nullSize) ->
-      mp3Parser `shouldFailOn` (BS.replicate nullSize 0 <> validMP3FramesBytes frames)
+    prop "mp3 duration stays the same when adding leading junk" $ \frame frames (LeadingJunk junk) -> do
+      let validBytes = validMP3FrameBytes frame <> validMP3FramesBytes frames
+      (junk <> validBytes) ~> mp3Parser `shouldBe` validBytes ~> mp3Parser
+
+    -- this is a specific example based on the now-passing previous property
+    -- with seed 1661661415
+    it "skips junk containing a valid frame header" $ do
+      let frames = mconcat . replicate 2 $ mkFrame standardMP3Settings
+          junk = "\x00\x01\x02" <> "\xff\xfb\x90\x00" <> "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19"
+      mp3Parser `shouldSucceedOn` (junk <> frames)
+
+    prop "fails on long leading junk" $ \frame frames (TooLongLeadingJunk junk) ->
+      (junk <> validMP3FrameBytes frame <> validMP3FramesBytes frames) ~> mp3Parser
+        `shouldFailWithErrorContaining`
+        "Couldn't find a valid MP3 frame after skipping leading junk"
 
     prop "fails on junk after last frame" $ \frames junk ->
       not (BS.null junk) && junk /= "\0" ==>
@@ -290,6 +299,12 @@ standardMP3Header = mkHeader standardMP3Settings
 frameHeaderSize :: Int
 frameHeaderSize = 4
 
+mkFrame :: MP3FrameSettings -> ByteString
+mkFrame mp3Settings =
+  let contentsSize = fromMaybe 0 $ frameLength mp3Settings
+  -- TODO how to foolproof myself against forgetting to subtract the frame header size?
+  in mkHeader mp3Settings <> BS.replicate (contentsSize - frameHeaderSize `noLessThan` 0) 0
+
 -- | Generates an mp3 frame with the given sampling rate, bitrate and padding,
 -- and arbitrary contents.
 genFrame :: MP3FrameSettings -> Gen ByteString
@@ -316,3 +331,52 @@ newtype ShortJunk = ShortJunk ByteString
 
 instance Arbitrary ShortJunk where
   arbitrary = ShortJunk . BS.pack <$> (flip vectorOf arbitrary =<< chooseInt (1, 3))
+
+-- | Arbitrary junk that is the ending part of a previous frame. It doesn't
+-- include a `0xff` byte in order not to confuse the frame parser.
+newtype LeadingJunkNoFF = LeadingJunkNoFF ByteString
+
+instance Show LeadingJunkNoFF where
+  show (LeadingJunkNoFF bs) = show $ BSB.byteString "LeadingJunkNoFF ("
+    <> BSB.intDec (BS.length bs) <> " bytes) "
+    <> BSB.byteStringHex bs
+
+instance Arbitrary LeadingJunkNoFF where
+  arbitrary = do
+    size <- chooseInt (1, 1440 - 1)
+    LeadingJunkNoFF . BS.pack <$> vectorOf size (chooseEnum (0, 254))
+
+-- TODO how to deduplicate with `LeadingJunkNoFF`?
+-- | Arbitrary junk that is the ending part of a previous frame. It can include
+-- a valid frame header bytes.
+newtype LeadingJunk = LeadingJunk ByteString
+
+instance Show LeadingJunk where
+  show (LeadingJunk bs) = show $ BSB.byteString "LeadingJunk ("
+    <> BSB.intDec (BS.length bs) <> " bytes) "
+    <> BSB.byteStringHex bs
+
+instance Arbitrary LeadingJunk where
+  arbitrary = do
+    size <- chooseInt (1, 1440 - 1)
+    LeadingJunk . BS.pack <$> vectorOf size arbitrary
+
+-- | Arbitrary junk that is of the max size of a single MP3 frame or longer.
+-- This can't appear in a valid MP3 stream.
+newtype TooLongLeadingJunk = TooLongLeadingJunk ByteString
+
+instance Show TooLongLeadingJunk where
+  show (TooLongLeadingJunk bs) = show $ BSB.byteString "TooLongLeadingJunk ("
+    <> BSB.intDec (BS.length bs) <> " bytes) "
+    <> BSB.byteStringHex bs
+
+instance Arbitrary TooLongLeadingJunk where
+  arbitrary = do
+    size <- chooseInt (1440, 9000)
+    TooLongLeadingJunk . BS.pack <$> vectorOf size arbitrary
+
+  shrink (TooLongLeadingJunk bs) = do
+    size <- shrink $ BS.length bs
+    -- this keeps the invariant that the size is at least 1440 bytes
+    guard $ size >= 1440
+    pure . TooLongLeadingJunk $ BS.take size bs
