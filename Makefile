@@ -26,7 +26,7 @@ testd:
 
 .PHONY:
 int-testd:
-	@ghcid --command "stack ghci --test --main-is $(INTEGRATION_TEST_TARGET) --ghci-options=-fobject-code" --test ":main --fail-fast --rerun --failure-report=int-testd.report"
+	@ghcid --command "stack ghci --test --main-is $(INTEGRATION_TEST_TARGET) --ghci-options=-fobject-code" --test ":main --fail-fast --rerun --rerun-all-on-success --failure-report=int-testd.report"
 
 .PHONY:
 testfw:
