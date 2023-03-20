@@ -4,6 +4,7 @@ import AnySizedTag
 import Control.Monad
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
+import Data.ByteString.Builder qualified as BSB
 import Data.Foldable
 import Data.Map.Strict qualified as M
 import Data.Maybe
@@ -13,6 +14,7 @@ import Domain.MP3HeaderTypes
 import Domain.MPEGHeaderTypes
 import ID3V1ValidTag qualified as ID3V1
 import MP3
+import Numeric
 import Prelude hiding (pred)
 import Test.Hspec
 import Test.Hspec.Attoparsec
@@ -102,23 +104,46 @@ spec = parallel $ do
     prop "consumes all (valid) frames" $ \frames ->
       complete mp3Parser `shouldSucceedOn` validMP3FramesBytes frames
 
-    prop "fails on junk before first frame" $ \frames junk ->
-      not (BS.null junk) ==>
-        -- it's highly unlikely that `junk` will contain a valid MP3 frame
-        mp3Parser `shouldFailOn` (junk <> validMP3FramesBytes frames)
+    prop "skips junk before first frame" $ \frame frames (LeadingJunkNoFF junk) ->
+      mp3Parser `shouldSucceedOn` (junk <> validMP3FrameBytes frame <> validMP3FramesBytes frames)
 
-    -- this test was discovered because previous test failed
-    -- "after 88 tests and 7 shrinks" with seed 673344435!
-    prop "fails on nulls before first frame" $ \frames (Positive nullSize) ->
-      mp3Parser `shouldFailOn` (BS.replicate nullSize 0 <> validMP3FramesBytes frames)
+    prop "mp3 duration stays the same when adding leading junk" $ \frame frames (LeadingJunk junk) -> do
+      let validBytes = validMP3FrameBytes frame <> validMP3FramesBytes frames
+      (junk <> validBytes) ~> mp3Parser `shouldBe` validBytes ~> mp3Parser
+
+    -- this is a specific example based on the now-passing previous property
+    -- with seed 1661661415
+    it "skips junk containing a valid frame header" $ do
+      let frames = mconcat . replicate 2 $ mkFrame standardMP3Settings
+          junk = "\x00\x01\x02" <> "\xff\xfb\x90\x00" <> "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19"
+      mp3Parser `shouldSucceedOn` (junk <> frames)
+
+    prop "fails on long leading junk" $ \frame frames (TooLongLeadingJunk junk) ->
+      (junk <> validMP3FrameBytes frame <> validMP3FramesBytes frames) ~> mp3Parser
+        `shouldFailWithErrorContaining`
+        "Couldn't find a valid MP3 frame after skipping leading junk"
 
     prop "fails on junk after last frame" $ \frames junk ->
-      not (BS.null junk) ==>
+      not (BS.null junk) && junk /= "\0" ==>
         -- it's highly unlikely that `junk` will contain a valid MP3 frame
         mp3Parser `shouldFailOn` (validMP3FramesBytes frames <> junk)
 
-    prop "fails on junk between frames" $ \(FramesWithMiddleJunk bytes) ->
-      mp3Parser `shouldFailOn` bytes
+    prop "skips last, truncated frame" $ \(MP3WithTruncatedFrame frames lastFrame) ->
+      mp3Parser `shouldSucceedOn` (frames <> lastFrame)
+
+    prop "fails on long trailing junk" $ \frames (TooLongLeadingJunk junk) ->
+      -- this can't fail with a more specific error because if this long junk
+      -- started with a frame header, that frame would be parsed as usual and
+      -- the rest would be junk; if it doesn't start with a frame header, it
+      -- doesn't make sense to check for 1440 bytes because there is no frame;
+      -- therefore, this fails on an unexpected EOF
+      mp3Parser `shouldFailOn` (validMP3FramesBytes frames <> junk)
+
+    prop "fails on junk between frames" $ \(FramesWithMiddleJunk beforeFrames afterFrames junk) ->
+      mp3Parser `shouldFailOn` (beforeFrames <> junk <> afterFrames)
+
+    prop "allows one null byte between frames" $ \(ValidMP3Frame frame0) (ValidMP3Frame frame1) ->
+      mp3Parser `shouldSucceedOn` (frame0 <> "\0" <> frame1)
 
     forM_ (M.toList frameDurations) $ \(sr, duration) ->
       prop ("calculates the duration of one " <> show sr <> " frame")
@@ -127,6 +152,32 @@ spec = parallel $ do
 
     prop "calculates the duration of all the frames" $ \frames ->
       dfBytes frames ~> mp3Parser `parsesDuration` dfDuration frames
+
+    describe "failed end-of-file" $ do
+      let junk = " \0\xff\xfb\x50\xc4"
+
+      prop "contains description" $ \(ValidMP3Frame frame) ->
+        (frame <> junk) ~> mp3Parser `shouldFailWithErrorContaining` "Expected end-of-file"
+
+      prop "contains position" $ \(ValidMP3Frame frame) -> do
+        let position = show $ BS.length frame
+        (frame <> junk) ~> mp3Parser `shouldFailWithErrorContaining` position
+
+      prop "contains position in hex" $ \(ValidMP3Frame frame) -> do
+        let position = "0x" <> showHex (BS.length frame) ""
+        (frame <> junk) ~> mp3Parser `shouldFailWithErrorContaining` position
+
+      prop "contains next 4 bytes" $ \(ValidMP3Frame frame) arbJunk ->
+        BS.length arbJunk >= 4 ==> do
+          let dump = show . foldMap' BSB.word8HexFixed . BS.unpack $ BS.take 4 arbJunk
+        -- this null byte is needed to feed the parser after the last frame so
+        -- that it doesn't eat it as part of the after-frame; an alternative
+        -- would be to ensure `junk` doesn't start with a null byte
+          (frame <> "\0" <> arbJunk) ~> mp3Parser `shouldFailWithErrorContaining` dump
+
+      prop "contains next 1–3 bytes" $ \(ValidMP3Frame frame) (ShortJunk arbJunk) -> do
+        let dump = show . foldMap' BSB.word8HexFixed . BS.unpack $ arbJunk
+        (frame <> "\0" <> arbJunk) ~> mp3Parser `shouldFailWithErrorContaining` dump
 
     describe "ID3 support" $ do
       prop "skips ID3 v2 tag before all frames" $ \frames ->
@@ -138,8 +189,23 @@ spec = parallel $ do
           let padding = BS.replicate paddingSize 0
           mp3Parser `shouldSucceedOn` (sampleID3V23Tag <> padding <> frame)
 
+      prop "skips post-ID3 space byte"
+        . forAll (genFrame $ MP3FrameSettings (BRValid VBV128) SR44100 NoPadding) $ \frame -> do
+          let padding = " "
+          mp3Parser `shouldSucceedOn` (sampleID3V23Tag <> padding <> frame)
+
       prop "skips ID3 v1 tag after all frames" $ \frames (ID3V1.ValidTag id3Tag) ->
         mp3Parser `shouldSucceedOn` (validMP3FramesBytes frames <> id3Tag)
+
+      it "does fail with correct message on unsupported ID3 version" $ do
+        pendingWith "can't find a way not to backtrack in attoparsec"
+        -- I'd expect `mp3Parser` to fail on the ID3 version from the (optional)
+        -- inner `id3Parser` because it already parsed "ID3" at the beginning;
+        -- however attoparsec backtracks to the beginning and starts parsing the
+        -- input as an MP3 frame, which produces a different error message
+        -- https://stackoverflow.com/questions/62586114/why-does-attoparsec-need-manytill-if-it-backtracks/62601398#62601398
+        let tag = mkID3Tag $ defaultID3TagSettings { idsVersion = "\x05\x00" }
+        tag ~> mp3Parser `shouldFailWithErrorContaining` "Unsupported ID3 version"
 
 -- | Checks that the parsed duration equals to the expected duration with the
 -- precision of `1e-5`.
@@ -163,15 +229,22 @@ newtype ValidMP3Frames = ValidMP3Frames (NonEmptyList ValidMP3Frame)
 validMP3FramesBytes :: ValidMP3Frames -> ByteString
 validMP3FramesBytes (ValidMP3Frames (NonEmpty frames)) = mconcat $ validMP3FrameBytes <$> frames
 
-newtype FramesWithMiddleJunk = FramesWithMiddleJunk ByteString
-  deriving newtype (Show)
+data FramesWithMiddleJunk = FramesWithMiddleJunk ByteString ByteString ByteString
+  deriving stock (Show)
 
 instance Arbitrary FramesWithMiddleJunk where
   arbitrary = do
-    framesBefore <- listOf1 arbitrary
-    framesAfter <- listOf1 arbitrary
-    junk <- arbitrary
-    pure . FramesWithMiddleJunk . mconcat $ concat [framesBefore, [junk], framesAfter]
+    framesBefore <- validMP3FramesBytes <$> arbitrary
+    framesAfter <- validMP3FramesBytes <$> arbitrary
+    junk <- BS.pack <$> listOf1 arbitrary
+    if junk == "\0"
+      then discard
+      else pure $ FramesWithMiddleJunk framesBefore framesAfter junk
+
+  shrink (FramesWithMiddleJunk beforeFrames afterFrames junk) = do
+    size <- shrink $ BS.length junk
+    guard $ size > 1
+    pure . FramesWithMiddleJunk beforeFrames afterFrames $ BS.take size junk
 
 -- | A wrapper for `MP3FrameSettings` that only prints its `SamplingRate` in `show`
 -- (because only that value is relevant to frame duration).
@@ -242,6 +315,12 @@ standardMP3Header = mkHeader standardMP3Settings
 frameHeaderSize :: Int
 frameHeaderSize = 4
 
+mkFrame :: MP3FrameSettings -> ByteString
+mkFrame mp3Settings =
+  let contentsSize = fromMaybe 0 $ frameLength mp3Settings
+  -- TODO how to foolproof myself against forgetting to subtract the frame header size?
+  in mkHeader mp3Settings <> BS.replicate (contentsSize - frameHeaderSize `noLessThan` 0) 0
+
 -- | Generates an mp3 frame with the given sampling rate, bitrate and padding,
 -- and arbitrary contents.
 genFrame :: MP3FrameSettings -> Gen ByteString
@@ -261,3 +340,77 @@ genHeaderWithInvalidFrameSync = do
   -- `chooseBoundedIntegral` is faster than `choose`
   frameSync <- chooseBoundedIntegral (0, 0b1111_1111_111 - 1)
   pure . mkMPEGHeader (mkFrameSync frameSync) NotProtected . MP3 $ standardMP3Settings
+
+-- | 1–3 arbitrary bytes. It's used to test hex dump at expected EOF.
+newtype ShortJunk = ShortJunk ByteString
+  deriving stock (Show)
+
+instance Arbitrary ShortJunk where
+  arbitrary = ShortJunk . BS.pack <$> (flip vectorOf arbitrary =<< chooseInt (1, 3))
+
+-- | Arbitrary junk that is the ending part of a previous frame. It doesn't
+-- include a `0xff` byte in order not to confuse the frame parser.
+newtype LeadingJunkNoFF = LeadingJunkNoFF ByteString
+
+instance Show LeadingJunkNoFF where
+  show (LeadingJunkNoFF bs) = show $ BSB.byteString "LeadingJunkNoFF ("
+    <> BSB.intDec (BS.length bs) <> " bytes) "
+    <> BSB.byteStringHex bs
+
+instance Arbitrary LeadingJunkNoFF where
+  arbitrary = do
+    size <- chooseInt (1, 1440 - 1)
+    LeadingJunkNoFF . BS.pack <$> vectorOf size (chooseEnum (0, 254))
+
+-- TODO how to deduplicate with `LeadingJunkNoFF`?
+-- | Arbitrary junk that is the ending part of a previous frame. It can include
+-- a valid frame header bytes.
+newtype LeadingJunk = LeadingJunk ByteString
+
+instance Show LeadingJunk where
+  show (LeadingJunk bs) = show $ BSB.byteString "LeadingJunk ("
+    <> BSB.intDec (BS.length bs) <> " bytes) "
+    <> BSB.byteStringHex bs
+
+instance Arbitrary LeadingJunk where
+  arbitrary = do
+    size <- chooseInt (1, 1440 - 1)
+    LeadingJunk . BS.pack <$> vectorOf size arbitrary
+
+-- | Arbitrary junk that is of the max size of a single MP3 frame or longer.
+-- This can't appear in a valid MP3 stream.
+newtype TooLongLeadingJunk = TooLongLeadingJunk ByteString
+
+instance Show TooLongLeadingJunk where
+  show (TooLongLeadingJunk bs) = show $ BSB.byteString "TooLongLeadingJunk ("
+    <> BSB.intDec (BS.length bs) <> " bytes) "
+    <> BSB.byteStringHex bs
+
+instance Arbitrary TooLongLeadingJunk where
+  arbitrary = do
+    size <- chooseInt (1440, 9000)
+    TooLongLeadingJunk . BS.pack <$> vectorOf size arbitrary
+
+  shrink (TooLongLeadingJunk bs) = do
+    size <- shrink $ BS.length bs
+    -- this keeps the invariant that the size is at least 1440 bytes
+    guard $ size >= 1440
+    pure . TooLongLeadingJunk $ BS.take size bs
+
+-- | 1+ valid frames with one truncated frame. The truncated frame always
+-- has at least its header.
+data MP3WithTruncatedFrame = MP3WithTruncatedFrame ByteString ByteString
+  deriving stock (Show)
+
+instance Arbitrary MP3WithTruncatedFrame where
+  arbitrary = do
+    validFrames <- arbitrary
+    frame <- validMP3FrameBytes <$> arbitrary
+    takeLength <- chooseInt (4, BS.length frame - 1)
+    let truncatedFrame = BS.take takeLength frame
+    pure $ MP3WithTruncatedFrame (validMP3FramesBytes validFrames) truncatedFrame
+
+  shrink (MP3WithTruncatedFrame frames truncatedFrame) = do
+    takeLength <- shrink $ BS.length truncatedFrame
+    guard $ takeLength >= 4
+    pure . MP3WithTruncatedFrame frames $ BS.take takeLength truncatedFrame

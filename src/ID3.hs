@@ -9,7 +9,7 @@ import Data.Foldable
 import Data.Functor
 import Data.Word
 
--- | Parses an ID3 v2.4 tag.
+-- | Parses an ID3 v2.2, v2.3 or v2.4 tag.
 id3Parser :: Parser ()
 id3Parser = do
   _ <- A.string "ID3"
@@ -22,7 +22,7 @@ id3Parser = do
 
 -- | Checks if the major version byte declares a supported version.
 isSupportedVersion :: Word8 -> Bool
-isSupportedVersion byte = byte == 3 || byte == 4
+isSupportedVersion byte = byte >= 2 && byte <= 4
 
 -- | Checks that the given byte is a part of a synchsafe integer, that is its
 -- most significant bit must be reset.
