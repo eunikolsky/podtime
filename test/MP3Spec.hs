@@ -107,8 +107,9 @@ spec = parallel $ do
     prop "skips junk before first frame" $ \frame frames (LeadingJunkNoFF junk) ->
       mp3Parser `shouldSucceedOn` (junk <> validMP3FrameBytes frame <> validMP3FramesBytes frames)
 
-    prop "skips leading junk that may contain frame header" $ \frame frames (LeadingJunk junk) ->
-      mp3Parser `shouldSucceedOn` (junk <> validMP3FrameBytes frame <> validMP3FramesBytes frames)
+    prop "mp3 duration stays the same when adding leading junk" $ \frame frames (LeadingJunk junk) -> do
+      let validBytes = validMP3FrameBytes frame <> validMP3FramesBytes frames
+      (junk <> validBytes) ~> mp3Parser `shouldBe` validBytes ~> mp3Parser
 
     -- this is a specific example based on the now-passing previous property
     -- with seed 1661661415
@@ -117,7 +118,6 @@ spec = parallel $ do
           junk = "\x00\x01\x02" <> "\xff\xfb\x90\x00" <> "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19"
       mp3Parser `shouldSucceedOn` (junk <> frames)
 
-    -- TODO duration with and without junk
     -- TODO fails(?) on longer junk
 
     prop "fails on junk after last frame" $ \frames junk ->
