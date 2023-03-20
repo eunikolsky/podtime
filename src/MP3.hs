@@ -148,7 +148,8 @@ skipPostID3Padding = A.skip (== 0x20) <|> A.skipWhile (== 0)
 -- number of bytes to read for this frame.
 frameHeaderParser :: Parser (SamplingRate, Int)
 frameHeaderParser = do
-  [byte0, byte1, byte2, _] <- A.count 4 A.anyWord8 <?> "Incomplete frame header"
+  let frameHeaderSize = 4
+  [byte0, byte1, byte2, _] <- A.count frameHeaderSize A.anyWord8 <?> "Incomplete frame header"
 
   frameSyncValidator (byte0, byte1)
   mpegVersionValidator byte1
@@ -159,7 +160,7 @@ frameHeaderParser = do
   samplingRate <- samplingRateParser byte2
 
   let paddingSize = if testBit byte2 paddingBitIndex then 1 else 0
-      contentsSize = frameSize bitrate samplingRate - 4 + paddingSize
+      contentsSize = frameSize bitrate samplingRate - frameHeaderSize + paddingSize
 
   pure (samplingRate, contentsSize)
 
