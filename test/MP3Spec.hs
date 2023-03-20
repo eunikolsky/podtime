@@ -131,7 +131,13 @@ spec = parallel $ do
     prop "skips last, truncated frame" $ \(MP3WithTruncatedFrame frames lastFrame) ->
       mp3Parser `shouldSucceedOn` (frames <> lastFrame)
 
-    -- FIXME fails(?) on long trailing junk
+    prop "fails on long trailing junk" $ \frames (TooLongLeadingJunk junk) ->
+      -- this can't fail with a more specific error because if this long junk
+      -- started with a frame header, that frame would be parsed as usual and
+      -- the rest would be junk; if it doesn't start with a frame header, it
+      -- doesn't make sense to check for 1440 bytes because there is no frame;
+      -- therefore, this fails on an unexpected EOF
+      mp3Parser `shouldFailOn` (validMP3FramesBytes frames <> junk)
 
     prop "fails on junk between frames" $ \(FramesWithMiddleJunk beforeFrames afterFrames junk) ->
       mp3Parser `shouldFailOn` (beforeFrames <> junk <> afterFrames)
