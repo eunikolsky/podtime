@@ -72,20 +72,30 @@ allowingPostNullByte = (<* optional (A.word8 0))
 
 -- | Parses first MP3 frames of a file skipping any leftovers from a previous
 -- frame. It can return either one frame (for valid MP3 files), or two frames
--- (for MP3 stream dumps that don't start with a frame).
+-- (for MP3 stream dumps that don't start with a frame). If the parser has
+-- skipped more than 1440 bytes (the max MP3 frame size) and hasn't found a
+-- valid frame header, this is an invalid MP3 stream.
 parseFirstFrames :: Parser [SamplingRate]
-parseFirstFrames = (singleton <$> frameParser) <|> findFirstFrames
+parseFirstFrames = (singleton <$> frameParser) <|> findFirstFrames (SkippedBytesCount 1)
   where
-    findFirstFrames = do
-      -- this skips a single byte to retry frames parsing from the next position
-      -- one byte skipping isn't very efficient and may or may not be slow;
-      -- however for a valid MP3 file, this junk is limited in size; an
-      -- alternative is to skip until a `0xff` byte, which is only a part of a
-      -- valid frame header, but that leaks lower-level details (of
-      -- `frameParser`) into this higher-level parser
-      -- TODO benchmark this and skip to `0xff` if necessary
-      void A.anyWord8
-      A.count 2 frameParser <|> findFirstFrames
+    maxFrameSize = 1440
+
+    findFirstFrames :: SkippedBytesCount -> Parser [SamplingRate]
+    findFirstFrames skippedCount
+      | skippedCount >= maxFrameSize = fail "Couldn't find a valid MP3 frame after skipping leading junk"
+      | otherwise = do
+        -- this skips a single byte to retry frames parsing from the next position
+        -- one byte skipping isn't very efficient and may or may not be slow;
+        -- however for a valid MP3 file, this junk is limited in size; an
+        -- alternative is to skip until a `0xff` byte, which is only a part of a
+        -- valid frame header, but that leaks lower-level details (of
+        -- `frameParser`) into this higher-level parser
+        -- TODO benchmark this and skip to `0xff` if necessary
+        void A.anyWord8
+        A.count 2 frameParser <|> findFirstFrames (skippedCount + 1)
+
+newtype SkippedBytesCount = SkippedBytesCount Int
+  deriving newtype (Num, Eq, Ord)
 
 frameDuration :: SamplingRate -> AudioDuration
 frameDuration = AudioDuration . (samplesPerFrame /) . samplingRateHz

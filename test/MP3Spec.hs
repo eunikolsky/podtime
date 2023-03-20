@@ -118,7 +118,10 @@ spec = parallel $ do
           junk = "\x00\x01\x02" <> "\xff\xfb\x90\x00" <> "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19"
       mp3Parser `shouldSucceedOn` (junk <> frames)
 
-    -- TODO fails(?) on longer junk
+    prop "fails on long leading junk" $ \frame frames (TooLongLeadingJunk junk) ->
+      (junk <> validMP3FrameBytes frame <> validMP3FramesBytes frames) ~> mp3Parser
+        `shouldFailWithErrorContaining`
+        "Couldn't find a valid MP3 frame after skipping leading junk"
 
     prop "fails on junk after last frame" $ \frames junk ->
       not (BS.null junk) && junk /= "\0" ==>
@@ -357,3 +360,23 @@ instance Arbitrary LeadingJunk where
   arbitrary = do
     size <- chooseInt (1, 1440 - 1)
     LeadingJunk . BS.pack <$> vectorOf size arbitrary
+
+-- | Arbitrary junk that is of the max size of a single MP3 frame or longer.
+-- This can't appear in a valid MP3 stream.
+newtype TooLongLeadingJunk = TooLongLeadingJunk ByteString
+
+instance Show TooLongLeadingJunk where
+  show (TooLongLeadingJunk bs) = show $ BSB.byteString "TooLongLeadingJunk ("
+    <> BSB.intDec (BS.length bs) <> " bytes) "
+    <> BSB.byteStringHex bs
+
+instance Arbitrary TooLongLeadingJunk where
+  arbitrary = do
+    size <- chooseInt (1440, 9000)
+    TooLongLeadingJunk . BS.pack <$> vectorOf size arbitrary
+
+  shrink (TooLongLeadingJunk bs) = do
+    size <- shrink $ BS.length bs
+    -- this keeps the invariant that the size is at least 1440 bytes
+    guard $ size >= 1440
+    pure . TooLongLeadingJunk $ BS.take size bs
