@@ -31,7 +31,7 @@ spec = parallel $ do
         forM_ [SR44100, SR48000, SR32000] $ \samplingRate ->
           forM_ [minBound..maxBound] $ \bitrate -> do
             let desciption = mconcat
-                  [ "parses a "
+                  [ "parses a MPEG1 Layer III "
                   , show bitrate, ", "
                   , show samplingRate, ", "
                   , show padding
