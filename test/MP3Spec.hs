@@ -124,7 +124,7 @@ spec = parallel $ do
         "Couldn't find a valid MP3 frame after skipping leading junk"
 
     prop "fails on junk after last frame" $ \frames junk ->
-      not (BS.null junk) && junk /= "\0" ==>
+      not (BS.null junk) ==>
         -- it's highly unlikely that `junk` will contain a valid MP3 frame
         mp3Parser `shouldFailOn` (validMP3FramesBytes frames <> junk)
 
@@ -142,8 +142,8 @@ spec = parallel $ do
     prop "fails on junk between frames" $ \(FramesWithMiddleJunk beforeFrames afterFrames junk) ->
       mp3Parser `shouldFailOn` (beforeFrames <> junk <> afterFrames)
 
-    prop "allows one null byte between frames" $ \(ValidMP3Frame frame0) (ValidMP3Frame frame1) ->
-      mp3Parser `shouldSucceedOn` (frame0 <> "\0" <> frame1)
+    prop "allows one byte between frames" $ \(ValidMP3Frame frame0) (ValidMP3Frame frame1) byte ->
+      mp3Parser `shouldSucceedOn` (frame0 <> BS.singleton byte <> frame1)
 
     forM_ (M.toList frameDurations) $ \(sr, duration) ->
       prop ("calculates the duration of one " <> show sr <> " frame")
@@ -170,14 +170,11 @@ spec = parallel $ do
       prop "contains next 4 bytes" $ \(ValidMP3Frame frame) arbJunk ->
         BS.length arbJunk >= 4 ==> do
           let dump = show . foldMap' BSB.word8HexFixed . BS.unpack $ BS.take 4 arbJunk
-        -- this null byte is needed to feed the parser after the last frame so
-        -- that it doesn't eat it as part of the after-frame; an alternative
-        -- would be to ensure `junk` doesn't start with a null byte
-          (frame <> "\0" <> arbJunk) ~> mp3Parser `shouldFailWithErrorContaining` dump
+          (frame <> arbJunk) ~> mp3Parser `shouldFailWithErrorContaining` dump
 
       prop "contains next 1–3 bytes" $ \(ValidMP3Frame frame) (ShortJunk arbJunk) -> do
         let dump = show . foldMap' BSB.word8HexFixed . BS.unpack $ arbJunk
-        (frame <> "\0" <> arbJunk) ~> mp3Parser `shouldFailWithErrorContaining` dump
+        (frame <> arbJunk) ~> mp3Parser `shouldFailWithErrorContaining` dump
 
     describe "ID3 support" $ do
       prop "skips ID3 v2 tag before all frames" $ \frames ->
@@ -229,6 +226,8 @@ newtype ValidMP3Frames = ValidMP3Frames (NonEmptyList ValidMP3Frame)
 validMP3FramesBytes :: ValidMP3Frames -> ByteString
 validMP3FramesBytes (ValidMP3Frames (NonEmpty frames)) = mconcat $ validMP3FrameBytes <$> frames
 
+-- | Generates a list of frames with some junk between a pair of frames. The
+-- junk contains at least two bytes.
 data FramesWithMiddleJunk = FramesWithMiddleJunk ByteString ByteString ByteString
   deriving stock (Show)
 
@@ -236,10 +235,8 @@ instance Arbitrary FramesWithMiddleJunk where
   arbitrary = do
     framesBefore <- validMP3FramesBytes <$> arbitrary
     framesAfter <- validMP3FramesBytes <$> arbitrary
-    junk <- BS.pack <$> listOf1 arbitrary
-    if junk == "\0"
-      then discard
-      else pure $ FramesWithMiddleJunk framesBefore framesAfter junk
+    junk <- (:) <$> arbitrary <*> listOf1 arbitrary
+    pure . FramesWithMiddleJunk framesBefore framesAfter $ BS.pack junk
 
   shrink (FramesWithMiddleJunk beforeFrames afterFrames junk) = do
     size <- shrink $ BS.length junk

@@ -33,7 +33,7 @@ instance Show AudioDuration where
 --   - or a leftover from a previous frame [0][1];
 --
 -- - consists of 1+ MP3 frames, where a frame may be followed by an optional
--- null byte;
+-- extra byte;
 --
 -- - optionally ends with:
 --   - an ID3 v1 tag;
@@ -68,8 +68,8 @@ mp3Parser = do
     -- technically not a part of it, that's why it's not defined in `id3Parser`
     skipPostID3Padding
 
-  firstSamplingRates <- allowingPostNullByte parseFirstFrames
-  samplingRates <- A.many' $ allowingPostNullByte frameParser
+  firstSamplingRates <- parseFirstFrames
+  samplingRates <- A.many' $ retryingAfterOneByte frameParser
 
   ID3V1.id3Parser <|>
     -- if we're here, all the sequential valid MP3 frames have been parsed and
@@ -79,12 +79,14 @@ mp3Parser = do
   endOfInput
   pure . sum $ frameDuration <$> firstSamplingRates <> samplingRates
 
--- | Combinator to allow an optional null byte after the given parser. It's used
--- to parse MP3 frames with a possible extra null byte after a frame; several
--- older episodes of "Accidental Tech Podcast" and "Under the Radar" have this
--- byte in addition to the already present padding.
-allowingPostNullByte :: Parser a -> Parser a
-allowingPostNullByte = (<* optional (A.word8 0))
+-- | Runs the parser `p` and if it fails, skips one byte and runs `p` again —
+-- this retry is done only once. It's used to parse MP3 frames with a possible
+-- extra byte after a frame; several older episodes of "Accidental Tech Podcast"
+-- and "Under the Radar" have a single null byte in addition to the already
+-- present padding; an "Under the Radar" episode has an `0xa8` byte, which is
+-- probably an audio byte and could be anything.
+retryingAfterOneByte :: Parser a -> Parser a
+retryingAfterOneByte p = p <|> (A.anyWord8 >> p)
 
 -- | Parses first MP3 frames of a file skipping any leftovers from a previous
 -- frame. It can return either one frame (for valid MP3 files), or two frames
