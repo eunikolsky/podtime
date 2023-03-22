@@ -1,15 +1,20 @@
 module Domain.MPEG1Types
   ( Bitrate(..)
+  , FrameSettings(..)
   , SamplingRate(..)
   , ValidBitrateValue(..)
-  , bitrateByte
   , frameLength
-  , samplingRateByte
+  , frameSettingsByte
   ) where
 
 import Data.Bits
 import Data.Map.Strict qualified as M
 import Data.Word
+
+data FrameSettings = FrameSettings
+  { fsBitrate :: !Bitrate
+  , fsSamplingRate :: !SamplingRate
+  }
 
 data SamplingRate = SR44100 | SR48000 | SR32000 | SRReserved
   deriving stock (Eq, Ord)
@@ -73,11 +78,16 @@ bitrateByte (BRValid VBV320) = 0b11100000
 bitrateByte BRFree           = 0b00000000
 bitrateByte BRBad            = 0b11110000
 
-frameLength :: Bitrate -> SamplingRate -> Maybe Int
-frameLength _ SRReserved = Nothing
-frameLength BRBad _ = Nothing
-frameLength BRFree _ = Nothing
-frameLength (BRValid vbv) sr = Just $ frameLengths M.! sr !! fromEnum vbv
+-- | Returns a zeroed frame byte where only the bitrate and sampling rate bits
+-- are set corresponding to `FrameSettings`.
+frameSettingsByte :: FrameSettings -> Word8
+frameSettingsByte (FrameSettings br sr) = bitrateByte br .|. samplingRateByte sr
+
+frameLength :: FrameSettings -> Maybe Int
+frameLength (FrameSettings _ SRReserved) = Nothing
+frameLength (FrameSettings BRBad _) = Nothing
+frameLength (FrameSettings BRFree _) = Nothing
+frameLength (FrameSettings (BRValid vbv) sr) = Just $ frameLengths M.! sr !! fromEnum vbv
 
 -- | Map from sampling rate to a list of frame lengths, one for each valid
 -- bitrate in the ascending order.

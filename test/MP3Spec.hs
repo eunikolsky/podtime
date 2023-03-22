@@ -38,7 +38,7 @@ spec = parallel $ do
                   , " frame"
                   ]
             modifyMaxSuccess (`div` 10) . prop desciption .
-              forAll (genFrame $ MP3FrameSettings (BRValid bitrate) samplingRate padding) $ \frame ->
+              forAll (genFrame $ MP3FrameSettings (FrameSettings (BRValid bitrate) samplingRate) padding) $ \frame ->
                 complete frameParser `shouldSucceedOn` frame
 
       prop "fails to parse frames with invalid frame sync"
@@ -68,15 +68,15 @@ spec = parallel $ do
             ("Unexpected Layer " <> layerDesc <> " frame")
 
       it "fails to parse frame with reserved sampling rate" $ do
-        let header = mkHeader $ MP3FrameSettings (BRValid VBV128) SRReserved NoPadding
+        let header = mkHeader $ MP3FrameSettings (FrameSettings (BRValid VBV128) SRReserved) NoPadding
         header ~> frameParser `shouldFailWithErrorContaining` "Unexpected sampling rate \"reserved\" (3)"
 
       it "fails to parse frame with free bitrate" $ do
-        let header = mkHeader $ MP3FrameSettings BRFree SR44100 NoPadding
+        let header = mkHeader $ MP3FrameSettings (FrameSettings BRFree SR44100) NoPadding
         header ~> frameParser `shouldFailWithErrorContaining` "Unexpected bitrate \"free\" (0)"
 
       it "fails to parse frame with bad bitrate" $ do
-        let header = mkHeader $ MP3FrameSettings BRBad SR44100 NoPadding
+        let header = mkHeader $ MP3FrameSettings (FrameSettings BRBad SR44100) NoPadding
         header ~> frameParser `shouldFailWithErrorContaining` "Unexpected bitrate \"bad\" (15)"
 
       it "fails to parse frame with protection" $ do
@@ -147,7 +147,7 @@ spec = parallel $ do
 
     forM_ (M.toList frameDurations) $ \(sr, duration) ->
       prop ("calculates the duration of one " <> show sr <> " frame")
-        . forAll (genFrame $ MP3FrameSettings (BRValid VBV128) sr NoPadding) $ \frame ->
+        . forAll (genFrame $ MP3FrameSettings (FrameSettings (BRValid VBV128) sr) NoPadding) $ \frame ->
           frame ~> mp3Parser `parsesDuration` duration
 
     prop "calculates the duration of all the frames" $ \frames ->
@@ -182,12 +182,12 @@ spec = parallel $ do
           mp3Parser `shouldSucceedOn` (astBytes id3Tag <> validMP3FramesBytes frames)
 
       prop "skips post-ID3 null padding bytes" $ \paddingSize ->
-        forAll (genFrame $ MP3FrameSettings (BRValid VBV128) SR44100 NoPadding) $ \frame -> do
+        forAll (genFrame $ MP3FrameSettings (FrameSettings (BRValid VBV128) SR44100) NoPadding) $ \frame -> do
           let padding = BS.replicate paddingSize 0
           mp3Parser `shouldSucceedOn` (sampleID3V23Tag <> padding <> frame)
 
       prop "skips post-ID3 space byte"
-        . forAll (genFrame $ MP3FrameSettings (BRValid VBV128) SR44100 NoPadding) $ \frame -> do
+        . forAll (genFrame $ MP3FrameSettings (FrameSettings (BRValid VBV128) SR44100) NoPadding) $ \frame -> do
           let padding = " "
           mp3Parser `shouldSucceedOn` (sampleID3V23Tag <> padding <> frame)
 
@@ -217,7 +217,7 @@ instance Arbitrary ValidMP3Frame where
     bitrate <- chooseEnum (minBound, maxBound)
     samplingRate <- elements [SR32000, SR44100, SR48000]
     padding <- elements [NoPadding, Padding]
-    bytes <- genFrame $ MP3FrameSettings (BRValid bitrate) samplingRate padding
+    bytes <- genFrame $ MP3FrameSettings (FrameSettings (BRValid bitrate) samplingRate) padding
     pure $ ValidMP3Frame bytes
 
 newtype ValidMP3Frames = ValidMP3Frames (NonEmptyList ValidMP3Frame)
@@ -248,7 +248,7 @@ instance Arbitrary FramesWithMiddleJunk where
 newtype MP3FrameSamplingRateSettings = MP3FrameSamplingRateSettings MP3FrameSettings
 
 instance Show MP3FrameSamplingRateSettings where
-  show (MP3FrameSamplingRateSettings s) = show $ mfSamplingRate s
+  show (MP3FrameSamplingRateSettings s) = show . fsSamplingRate $ mfFrameSettings s
 
 -- | A generated MP3 frame that prints only its settings in `show`.
 data MP3Frame = MP3Frame
@@ -298,12 +298,12 @@ instance Arbitrary DurationFrames where
       chooseFrame samplingRate = do
         bitrate <- chooseEnum (minBound, maxBound)
         padding <- elements [NoPadding, Padding]
-        let settings = MP3FrameSettings (BRValid bitrate) samplingRate padding
+        let settings = MP3FrameSettings (FrameSettings (BRValid bitrate) samplingRate) padding
         bytes <- genFrame settings
         pure $ MP3Frame (MP3FrameSamplingRateSettings settings) bytes
 
 standardMP3Settings :: MP3FrameSettings
-standardMP3Settings = MP3FrameSettings (BRValid VBV128) SR44100 NoPadding
+standardMP3Settings = MP3FrameSettings (FrameSettings (BRValid VBV128) SR44100) NoPadding
 
 -- | A standard 128 kb/s, 44.1 kHz mp3 frame header.
 standardMP3Header :: ByteString

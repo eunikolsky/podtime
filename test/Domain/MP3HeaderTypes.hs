@@ -5,11 +5,11 @@ module Domain.MP3HeaderTypes
   , paddingByte
 
   -- * these are reexported from `Domain.MPEG1Types` for now
-  , MPEG1.SamplingRate(..)
   , MPEG1.Bitrate(..)
+  , MPEG1.FrameSettings(..)
+  , MPEG1.SamplingRate(..)
   , MPEG1.ValidBitrateValue(..)
-  , MPEG1.bitrateByte
-  , MPEG1.samplingRateByte
+  , MPEG1.frameSettingsByte
   ) where
 
 import Data.Bits
@@ -18,15 +18,14 @@ import Domain.MPEG1Types qualified as MPEG1
 
 -- | MP3 frame header's settings which define the frame length (in bytes).
 data MP3FrameSettings = MP3FrameSettings
-  { mfBitrate :: !MPEG1.Bitrate
-  , mfSamplingRate :: !MPEG1.SamplingRate
+  { mfFrameSettings :: !MPEG1.FrameSettings
   , mfPadding :: !Padding
   }
 
 -- | Returns frame length for the `MP3FrameSettings`.
 frameLength :: MP3FrameSettings -> Maybe Int
-frameLength (MP3FrameSettings br sr padding) =
-  (+ paddingSize padding) <$> MPEG1.frameLength br sr
+frameLength (MP3FrameSettings frameSettings padding) =
+  (+ paddingSize padding) <$> MPEG1.frameLength frameSettings
 
 data Padding = Padding | NoPadding
 

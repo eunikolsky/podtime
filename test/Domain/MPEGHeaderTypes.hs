@@ -93,11 +93,9 @@ mkMPEGHeader frameSync protection mpeg = BS.pack
       , protectionByte protection
       ]
     byte2 = case mpeg of
-      MP3 mp3Settings -> orBytes
-        [ bitrateByte $ mfBitrate mp3Settings
-        , samplingRateByte $ mfSamplingRate mp3Settings
-        , paddingByte $ mfPadding mp3Settings
-        ]
+      MP3 mp3Settings ->
+        frameSettingsByte (mfFrameSettings mp3Settings)
+          .|. paddingByte (mfPadding mp3Settings)
       _ -> 0
 
 -- | `OR`s all the bytes in the container.
