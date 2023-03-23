@@ -160,8 +160,16 @@ spec = parallel $ do
       mp3Parser `shouldSucceedOn` (frame0 <> BS.singleton byte <> frame1)
 
     forM_ (M.toList frameDurations) $ \(sr, duration) ->
-      prop ("calculates the duration of one " <> show sr <> " frame")
+      prop ("calculates the duration of one MPEG1 " <> show sr <> " frame")
         . forAll (genFrame $ MP3FrameSettings (MPEG1FrameSettings (BRValid VBV128) sr) NoPadding) $ \frame ->
+          frame ~> mp3Parser `parsesDuration` duration
+
+    forM_ [ (MPEG2.SR16000, 0.072)
+          , (MPEG2.SR22050, 0.052244897)
+          , (MPEG2.SR24000, 0.048)
+          ] $ \(sr, duration) ->
+      prop ("calculates the duration of one MPEG2 " <> show sr <> " frame")
+        . forAll (genFrame $ MP3FrameSettings (MPEG2FrameSettings (MPEG2.BRValid MPEG2.VBV128) sr) NoPadding) $ \frame ->
           frame ~> mp3Parser `parsesDuration` duration
 
     prop "calculates the duration of all the frames" $ \frames ->
