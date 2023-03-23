@@ -32,18 +32,24 @@ instance Show Layer where
   show Layer3 = "Layer III"
   show LayerReserved = "Layer <reserved>"
 
-data MPEGSettings = MP3 !MP3FrameSettings | MPEGOther !MPEGVersion !Layer
+data MPEGSettings
+  = MP3 !MP3FrameSettings
+  | MPEG2Layer3 !MP3FrameSettings
+  | MPEGOther !MPEGVersion !Layer
 
 instance Show MPEGSettings where
-  show (MP3 _) = "MP3"
+  show (MP3 _) = "MPEG1 Layer3"
+  show (MPEG2Layer3 _) = "MPEG2 Layer3"
   show (MPEGOther v l) = mconcat [show v, ", ", show l]
 
 mpegVersion :: MPEGSettings -> MPEGVersion
 mpegVersion (MP3 _) = MPEG1
+mpegVersion (MPEG2Layer3 _) = MPEG2
 mpegVersion (MPEGOther v _) = v
 
 mpegLayer :: MPEGSettings -> Layer
 mpegLayer (MP3 _) = Layer3
+mpegLayer (MPEG2Layer3 _) = Layer3
 mpegLayer (MPEGOther _ l) = l
 
 data Protection = NotProtected | ProtectedCRC
@@ -72,7 +78,10 @@ protectionByte ProtectedCRC = 0
 
 -- | Returns data for MP3 header with the given settings.
 mkHeader :: MP3FrameSettings -> ByteString
-mkHeader = mkMPEGHeader validFrameSync NotProtected . MP3
+mkHeader = mkMPEGHeader validFrameSync NotProtected . wrapHeader
+  where
+    wrapHeader fs@(MP3FrameSettings (MPEG1FrameSettings _ _) _) = MP3 fs
+    wrapHeader fs@(MP3FrameSettings (MPEG2FrameSettings _ _) _) = MPEG2Layer3 fs
 
 -- | Returns data for an MPEG header with the given settings.
 mkMPEGHeader :: FrameSync -> Protection -> MPEGSettings -> ByteString
@@ -93,11 +102,12 @@ mkMPEGHeader frameSync protection mpeg = BS.pack
       , protectionByte protection
       ]
     byte2 = case mpeg of
-      MP3 mp3Settings -> orBytes
-        [ bitrateByte $ mfBitrate mp3Settings
-        , samplingRateByte $ mfSamplingRate mp3Settings
-        , paddingByte $ mfPadding mp3Settings
-        ]
+      MP3 mp3Settings ->
+        frameSettingsByte (mfFrameSettings mp3Settings)
+          .|. paddingByte (mfPadding mp3Settings)
+      MPEG2Layer3 mp3Settings ->
+        frameSettingsByte (mfFrameSettings mp3Settings)
+          .|. paddingByte (mfPadding mp3Settings)
       _ -> 0
 
 -- | `OR`s all the bytes in the container.
