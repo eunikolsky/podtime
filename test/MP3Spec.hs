@@ -11,6 +11,7 @@ import Data.Maybe
 import Domain.FrameSync
 import Domain.ID3Tag
 import Domain.MP3HeaderTypes
+import Domain.MPEG2Types qualified as MPEG2
 import Domain.MPEGHeaderTypes
 import ID3V1ValidTag qualified as ID3V1
 import MP3
@@ -31,14 +32,28 @@ spec = parallel $ do
         forM_ [SR44100, SR48000, SR32000] $ \samplingRate ->
           forM_ [minBound..maxBound] $ \bitrate -> do
             let desciption = mconcat
-                  [ "parses a "
+                  [ "parses a MPEG1 Layer III "
                   , show bitrate, ", "
                   , show samplingRate, ", "
                   , show padding
                   , " frame"
                   ]
             modifyMaxSuccess (`div` 10) . prop desciption .
-              forAll (genFrame $ MP3FrameSettings (BRValid bitrate) samplingRate padding) $ \frame ->
+              forAll (genFrame $ MP3FrameSettings (MPEG1FrameSettings (BRValid bitrate) samplingRate) padding) $ \frame ->
+                complete frameParser `shouldSucceedOn` frame
+
+      forM_ [NoPadding, Padding] $ \padding ->
+        forM_ [MPEG2.SR22050, MPEG2.SR24000, MPEG2.SR16000] $ \samplingRate ->
+          forM_ [minBound..maxBound] $ \bitrate -> do
+            let desciption = mconcat
+                  [ "parses a MPEG2 Layer III "
+                  , show bitrate, ", "
+                  , show samplingRate, ", "
+                  , show padding
+                  , " frame"
+                  ]
+            modifyMaxSuccess (`div` 10) . prop desciption .
+              forAll (genFrame $ MP3FrameSettings (MPEG2FrameSettings (MPEG2.BRValid bitrate) samplingRate) padding) $ \frame ->
                 complete frameParser `shouldSucceedOn` frame
 
       prop "fails to parse frames with invalid frame sync"
@@ -46,8 +61,11 @@ spec = parallel $ do
           header ~> frameParser `shouldFailWithErrorContaining` "Invalid frame sync"
 
     describe "examples" $ do
-      forM_ [ (MPEG2, "2 (2)")
-            , (MPEG25, "2.5 (0)")
+      it "parses frame with protection" $ do
+        let frame = mkFrame ProtectedCRC standardMP3Settings
+        complete frameParser `shouldSucceedOn` frame
+
+      forM_ [ (MPEG25, "2.5 (0)")
             , (MPEGReserved, "\"reserved\" (1)")
             ] $ \(version, versionDesc) ->
         forM_ [minBound..maxBound] $ \layer -> do
@@ -68,20 +86,16 @@ spec = parallel $ do
             ("Unexpected Layer " <> layerDesc <> " frame")
 
       it "fails to parse frame with reserved sampling rate" $ do
-        let header = mkHeader $ MP3FrameSettings (BRValid VBV128) SRReserved NoPadding
+        let header = mkHeader NotProtected $ MP3FrameSettings (MPEG1FrameSettings (BRValid VBV128) SRReserved) NoPadding
         header ~> frameParser `shouldFailWithErrorContaining` "Unexpected sampling rate \"reserved\" (3)"
 
       it "fails to parse frame with free bitrate" $ do
-        let header = mkHeader $ MP3FrameSettings BRFree SR44100 NoPadding
+        let header = mkHeader NotProtected $ MP3FrameSettings (MPEG1FrameSettings BRFree SR44100) NoPadding
         header ~> frameParser `shouldFailWithErrorContaining` "Unexpected bitrate \"free\" (0)"
 
       it "fails to parse frame with bad bitrate" $ do
-        let header = mkHeader $ MP3FrameSettings BRBad SR44100 NoPadding
+        let header = mkHeader NotProtected $ MP3FrameSettings (MPEG1FrameSettings BRBad SR44100) NoPadding
         header ~> frameParser `shouldFailWithErrorContaining` "Unexpected bitrate \"bad\" (15)"
-
-      it "fails to parse frame with protection" $ do
-        let header = mkMPEGHeader validFrameSync ProtectedCRC $ MP3 standardMP3Settings
-        header ~> frameParser `shouldFailWithErrorContaining` "Unexpected CRC-protected (0) frame"
 
       it "fails to parse incomplete frame headers" $ do
         forM_ [1..3] $ \numBytesLeft -> do
@@ -114,7 +128,7 @@ spec = parallel $ do
     -- this is a specific example based on the now-passing previous property
     -- with seed 1661661415
     it "skips junk containing a valid frame header" $ do
-      let frames = mconcat . replicate 2 $ mkFrame standardMP3Settings
+      let frames = mconcat . replicate 2 $ mkFrame NotProtected standardMP3Settings
           junk = "\x00\x01\x02" <> "\xff\xfb\x90\x00" <> "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19"
       mp3Parser `shouldSucceedOn` (junk <> frames)
 
@@ -124,7 +138,7 @@ spec = parallel $ do
         "Couldn't find a valid MP3 frame after skipping leading junk"
 
     prop "fails on junk after last frame" $ \frames junk ->
-      not (BS.null junk) && junk /= "\0" ==>
+      not (BS.null junk) ==>
         -- it's highly unlikely that `junk` will contain a valid MP3 frame
         mp3Parser `shouldFailOn` (validMP3FramesBytes frames <> junk)
 
@@ -142,12 +156,20 @@ spec = parallel $ do
     prop "fails on junk between frames" $ \(FramesWithMiddleJunk beforeFrames afterFrames junk) ->
       mp3Parser `shouldFailOn` (beforeFrames <> junk <> afterFrames)
 
-    prop "allows one null byte between frames" $ \(ValidMP3Frame frame0) (ValidMP3Frame frame1) ->
-      mp3Parser `shouldSucceedOn` (frame0 <> "\0" <> frame1)
+    prop "allows one byte between frames" $ \(ValidMP3Frame frame0) (ValidMP3Frame frame1) byte ->
+      mp3Parser `shouldSucceedOn` (frame0 <> BS.singleton byte <> frame1)
 
     forM_ (M.toList frameDurations) $ \(sr, duration) ->
-      prop ("calculates the duration of one " <> show sr <> " frame")
-        . forAll (genFrame $ MP3FrameSettings (BRValid VBV128) sr NoPadding) $ \frame ->
+      prop ("calculates the duration of one MPEG1 " <> show sr <> " frame")
+        . forAll (genFrame $ MP3FrameSettings (MPEG1FrameSettings (BRValid VBV128) sr) NoPadding) $ \frame ->
+          frame ~> mp3Parser `parsesDuration` duration
+
+    forM_ [ (MPEG2.SR16000, 0.072)
+          , (MPEG2.SR22050, 0.052244897)
+          , (MPEG2.SR24000, 0.048)
+          ] $ \(sr, duration) ->
+      prop ("calculates the duration of one MPEG2 " <> show sr <> " frame")
+        . forAll (genFrame $ MP3FrameSettings (MPEG2FrameSettings (MPEG2.BRValid MPEG2.VBV128) sr) NoPadding) $ \frame ->
           frame ~> mp3Parser `parsesDuration` duration
 
     prop "calculates the duration of all the frames" $ \frames ->
@@ -170,14 +192,11 @@ spec = parallel $ do
       prop "contains next 4 bytes" $ \(ValidMP3Frame frame) arbJunk ->
         BS.length arbJunk >= 4 ==> do
           let dump = show . foldMap' BSB.word8HexFixed . BS.unpack $ BS.take 4 arbJunk
-        -- this null byte is needed to feed the parser after the last frame so
-        -- that it doesn't eat it as part of the after-frame; an alternative
-        -- would be to ensure `junk` doesn't start with a null byte
-          (frame <> "\0" <> arbJunk) ~> mp3Parser `shouldFailWithErrorContaining` dump
+          (frame <> arbJunk) ~> mp3Parser `shouldFailWithErrorContaining` dump
 
       prop "contains next 1–3 bytes" $ \(ValidMP3Frame frame) (ShortJunk arbJunk) -> do
         let dump = show . foldMap' BSB.word8HexFixed . BS.unpack $ arbJunk
-        (frame <> "\0" <> arbJunk) ~> mp3Parser `shouldFailWithErrorContaining` dump
+        (frame <> arbJunk) ~> mp3Parser `shouldFailWithErrorContaining` dump
 
     describe "ID3 support" $ do
       prop "skips ID3 v2 tag before all frames" $ \frames ->
@@ -185,12 +204,12 @@ spec = parallel $ do
           mp3Parser `shouldSucceedOn` (astBytes id3Tag <> validMP3FramesBytes frames)
 
       prop "skips post-ID3 null padding bytes" $ \paddingSize ->
-        forAll (genFrame $ MP3FrameSettings (BRValid VBV128) SR44100 NoPadding) $ \frame -> do
+        forAll (genFrame $ MP3FrameSettings (MPEG1FrameSettings (BRValid VBV128) SR44100) NoPadding) $ \frame -> do
           let padding = BS.replicate paddingSize 0
           mp3Parser `shouldSucceedOn` (sampleID3V23Tag <> padding <> frame)
 
       prop "skips post-ID3 space byte"
-        . forAll (genFrame $ MP3FrameSettings (BRValid VBV128) SR44100 NoPadding) $ \frame -> do
+        . forAll (genFrame $ MP3FrameSettings (MPEG1FrameSettings (BRValid VBV128) SR44100) NoPadding) $ \frame -> do
           let padding = " "
           mp3Parser `shouldSucceedOn` (sampleID3V23Tag <> padding <> frame)
 
@@ -220,7 +239,7 @@ instance Arbitrary ValidMP3Frame where
     bitrate <- chooseEnum (minBound, maxBound)
     samplingRate <- elements [SR32000, SR44100, SR48000]
     padding <- elements [NoPadding, Padding]
-    bytes <- genFrame $ MP3FrameSettings (BRValid bitrate) samplingRate padding
+    bytes <- genFrame $ MP3FrameSettings (MPEG1FrameSettings (BRValid bitrate) samplingRate) padding
     pure $ ValidMP3Frame bytes
 
 newtype ValidMP3Frames = ValidMP3Frames (NonEmptyList ValidMP3Frame)
@@ -229,6 +248,8 @@ newtype ValidMP3Frames = ValidMP3Frames (NonEmptyList ValidMP3Frame)
 validMP3FramesBytes :: ValidMP3Frames -> ByteString
 validMP3FramesBytes (ValidMP3Frames (NonEmpty frames)) = mconcat $ validMP3FrameBytes <$> frames
 
+-- | Generates a list of frames with some junk between a pair of frames. The
+-- junk contains at least two bytes.
 data FramesWithMiddleJunk = FramesWithMiddleJunk ByteString ByteString ByteString
   deriving stock (Show)
 
@@ -236,10 +257,8 @@ instance Arbitrary FramesWithMiddleJunk where
   arbitrary = do
     framesBefore <- validMP3FramesBytes <$> arbitrary
     framesAfter <- validMP3FramesBytes <$> arbitrary
-    junk <- BS.pack <$> listOf1 arbitrary
-    if junk == "\0"
-      then discard
-      else pure $ FramesWithMiddleJunk framesBefore framesAfter junk
+    junk <- (:) <$> arbitrary <*> listOf1 arbitrary
+    pure . FramesWithMiddleJunk framesBefore framesAfter $ BS.pack junk
 
   shrink (FramesWithMiddleJunk beforeFrames afterFrames junk) = do
     size <- shrink $ BS.length junk
@@ -251,7 +270,8 @@ instance Arbitrary FramesWithMiddleJunk where
 newtype MP3FrameSamplingRateSettings = MP3FrameSamplingRateSettings MP3FrameSettings
 
 instance Show MP3FrameSamplingRateSettings where
-  show (MP3FrameSamplingRateSettings s) = show $ mfSamplingRate s
+  show (MP3FrameSamplingRateSettings (MP3FrameSettings (MPEG1FrameSettings _ sr) _)) = show sr
+  show (MP3FrameSamplingRateSettings (MP3FrameSettings (MPEG2FrameSettings _ sr) _)) = show sr
 
 -- | A generated MP3 frame that prints only its settings in `show`.
 data MP3Frame = MP3Frame
@@ -301,25 +321,25 @@ instance Arbitrary DurationFrames where
       chooseFrame samplingRate = do
         bitrate <- chooseEnum (minBound, maxBound)
         padding <- elements [NoPadding, Padding]
-        let settings = MP3FrameSettings (BRValid bitrate) samplingRate padding
+        let settings = MP3FrameSettings (MPEG1FrameSettings (BRValid bitrate) samplingRate) padding
         bytes <- genFrame settings
         pure $ MP3Frame (MP3FrameSamplingRateSettings settings) bytes
 
 standardMP3Settings :: MP3FrameSettings
-standardMP3Settings = MP3FrameSettings (BRValid VBV128) SR44100 NoPadding
+standardMP3Settings = MP3FrameSettings (MPEG1FrameSettings (BRValid VBV128) SR44100) NoPadding
 
 -- | A standard 128 kb/s, 44.1 kHz mp3 frame header.
 standardMP3Header :: ByteString
-standardMP3Header = mkHeader standardMP3Settings
+standardMP3Header = mkHeader NotProtected standardMP3Settings
 
 frameHeaderSize :: Int
 frameHeaderSize = 4
 
-mkFrame :: MP3FrameSettings -> ByteString
-mkFrame mp3Settings =
+mkFrame :: Protection -> MP3FrameSettings -> ByteString
+mkFrame protection mp3Settings =
   let contentsSize = fromMaybe 0 $ frameLength mp3Settings
   -- TODO how to foolproof myself against forgetting to subtract the frame header size?
-  in mkHeader mp3Settings <> BS.replicate (contentsSize - frameHeaderSize `noLessThan` 0) 0
+  in mkHeader protection mp3Settings <> BS.replicate (contentsSize - frameHeaderSize `noLessThan` 0) 0
 
 -- | Generates an mp3 frame with the given sampling rate, bitrate and padding,
 -- and arbitrary contents.
@@ -327,7 +347,7 @@ genFrame :: MP3FrameSettings -> Gen ByteString
 genFrame mp3Settings = do
   let contentsSize = fromMaybe 0 $ frameLength mp3Settings
   contents <- vectorOf (contentsSize - frameHeaderSize `noLessThan` 0) arbitrary
-  pure $ mkHeader mp3Settings <> BS.pack contents
+  pure $ mkHeader NotProtected mp3Settings <> BS.pack contents
 
 -- | Returns the first number if it's >= the second number; otherwise, the second
 -- number. It's a more obvious name for `max`.
