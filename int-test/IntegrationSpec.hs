@@ -1,14 +1,20 @@
 module IntegrationSpec (main) where
 
+import Control.Exception
 import Control.Monad
 import Data.ByteString qualified as B
+import Data.List (find)
+import Data.Maybe
 import MP3
 import SuccessFormatter
 import System.Directory
+import System.Exit
 import System.FilePath
+import System.Process
 import Test.Hspec
 import Test.Hspec.Attoparsec
 import Test.Hspec.Core.Runner
+import Text.Read
 import Text.Show.Unicode
 
 main :: IO ()
@@ -28,6 +34,35 @@ spec (Episodes baseDir mp3s) =
       it ("parses " <> ushow mp3) $ do
         contents <- B.readFile $ baseDir </> mp3
         mp3Parser `shouldSucceedOn` contents
+
+    let mp3 = head mp3s
+    fit ("parsed duration matches ffmpeg's duration: " <> ushow mp3) $ do
+      let filepath = baseDir </> mp3
+      contents <- B.readFile filepath
+      externalDuration <- getExternalAudioDuration filepath
+      contents ~> mp3Parser `shouldParse` externalDuration
+
+-- | Runs `sox` to get the duration of the mp3 file. The duration is not
+-- estimated, but calculated accurately.
+getExternalAudioDuration :: FilePath -> IO AudioDuration
+getExternalAudioDuration mp3 = getDuration <$> runSox
+  where
+    runSox = do
+      (exitCode, _, stderr) <- readProcessWithExitCode
+        "sox"
+        ["--ignore-length", mp3, "-n", "stat"]
+        ""
+      when (exitCode /= ExitSuccess) . throwIO .
+        AssertionFailed . mconcat $
+          [ "sox returned exit code ", show exitCode
+          , ": ", stderr
+          ]
+      pure stderr
+
+    getDuration output = fromJust $ do
+      lengthWords <- find ((== "Length") . head) . fmap words $ lines output
+      let lengthString = last lengthWords
+      AudioDuration <$> readMaybe @Float lengthString
 
 -- | Contains a list of episodes relative to the base directory. This separation
 -- is necessary in order to shorten the test names.
