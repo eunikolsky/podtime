@@ -77,8 +77,8 @@ protectionByte NotProtected = 1
 protectionByte ProtectedCRC = 0
 
 -- | Returns data for MP3 header with the given settings.
-mkHeader :: MP3FrameSettings -> ByteString
-mkHeader = mkMPEGHeader validFrameSync NotProtected . wrapHeader
+mkHeader :: Protection -> MP3FrameSettings -> ByteString
+mkHeader protection = mkMPEGHeader validFrameSync protection . wrapHeader
   where
     wrapHeader fs@(MP3FrameSettings (MPEG1FrameSettings _ _) _) = MP3 fs
     wrapHeader fs@(MP3FrameSettings (MPEG2FrameSettings _ _) _) = MPEG2Layer3 fs

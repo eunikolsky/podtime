@@ -61,6 +61,10 @@ spec = parallel $ do
           header ~> frameParser `shouldFailWithErrorContaining` "Invalid frame sync"
 
     describe "examples" $ do
+      it "parses frame with protection" $ do
+        let frame = mkFrame ProtectedCRC standardMP3Settings
+        complete frameParser `shouldSucceedOn` frame
+
       forM_ [ (MPEG25, "2.5 (0)")
             , (MPEGReserved, "\"reserved\" (1)")
             ] $ \(version, versionDesc) ->
@@ -82,20 +86,16 @@ spec = parallel $ do
             ("Unexpected Layer " <> layerDesc <> " frame")
 
       it "fails to parse frame with reserved sampling rate" $ do
-        let header = mkHeader $ MP3FrameSettings (MPEG1FrameSettings (BRValid VBV128) SRReserved) NoPadding
+        let header = mkHeader NotProtected $ MP3FrameSettings (MPEG1FrameSettings (BRValid VBV128) SRReserved) NoPadding
         header ~> frameParser `shouldFailWithErrorContaining` "Unexpected sampling rate \"reserved\" (3)"
 
       it "fails to parse frame with free bitrate" $ do
-        let header = mkHeader $ MP3FrameSettings (MPEG1FrameSettings BRFree SR44100) NoPadding
+        let header = mkHeader NotProtected $ MP3FrameSettings (MPEG1FrameSettings BRFree SR44100) NoPadding
         header ~> frameParser `shouldFailWithErrorContaining` "Unexpected bitrate \"free\" (0)"
 
       it "fails to parse frame with bad bitrate" $ do
-        let header = mkHeader $ MP3FrameSettings (MPEG1FrameSettings BRBad SR44100) NoPadding
+        let header = mkHeader NotProtected $ MP3FrameSettings (MPEG1FrameSettings BRBad SR44100) NoPadding
         header ~> frameParser `shouldFailWithErrorContaining` "Unexpected bitrate \"bad\" (15)"
-
-      it "fails to parse frame with protection" $ do
-        let header = mkMPEGHeader validFrameSync ProtectedCRC $ MP3 standardMP3Settings
-        header ~> frameParser `shouldFailWithErrorContaining` "Unexpected CRC-protected (0) frame"
 
       it "fails to parse incomplete frame headers" $ do
         forM_ [1..3] $ \numBytesLeft -> do
@@ -128,7 +128,7 @@ spec = parallel $ do
     -- this is a specific example based on the now-passing previous property
     -- with seed 1661661415
     it "skips junk containing a valid frame header" $ do
-      let frames = mconcat . replicate 2 $ mkFrame standardMP3Settings
+      let frames = mconcat . replicate 2 $ mkFrame NotProtected standardMP3Settings
           junk = "\x00\x01\x02" <> "\xff\xfb\x90\x00" <> "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19"
       mp3Parser `shouldSucceedOn` (junk <> frames)
 
@@ -330,16 +330,16 @@ standardMP3Settings = MP3FrameSettings (MPEG1FrameSettings (BRValid VBV128) SR44
 
 -- | A standard 128 kb/s, 44.1 kHz mp3 frame header.
 standardMP3Header :: ByteString
-standardMP3Header = mkHeader standardMP3Settings
+standardMP3Header = mkHeader NotProtected standardMP3Settings
 
 frameHeaderSize :: Int
 frameHeaderSize = 4
 
-mkFrame :: MP3FrameSettings -> ByteString
-mkFrame mp3Settings =
+mkFrame :: Protection -> MP3FrameSettings -> ByteString
+mkFrame protection mp3Settings =
   let contentsSize = fromMaybe 0 $ frameLength mp3Settings
   -- TODO how to foolproof myself against forgetting to subtract the frame header size?
-  in mkHeader mp3Settings <> BS.replicate (contentsSize - frameHeaderSize `noLessThan` 0) 0
+  in mkHeader protection mp3Settings <> BS.replicate (contentsSize - frameHeaderSize `noLessThan` 0) 0
 
 -- | Generates an mp3 frame with the given sampling rate, bitrate and padding,
 -- and arbitrary contents.
@@ -347,7 +347,7 @@ genFrame :: MP3FrameSettings -> Gen ByteString
 genFrame mp3Settings = do
   let contentsSize = fromMaybe 0 $ frameLength mp3Settings
   contents <- vectorOf (contentsSize - frameHeaderSize `noLessThan` 0) arbitrary
-  pure $ mkHeader mp3Settings <> BS.pack contents
+  pure $ mkHeader NotProtected mp3Settings <> BS.pack contents
 
 -- | Returns the first number if it's >= the second number; otherwise, the second
 -- number. It's a more obvious name for `max`.

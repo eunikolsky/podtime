@@ -157,7 +157,6 @@ frameHeaderParser = do
   frameSyncValidator (byte0, byte1)
   mpegVersion <- parseMPEGVersion byte1
   layerValidator byte1
-  protectionValidator byte1
 
   bitrate <- bitrateParser mpegVersion byte2
   samplingRate <- samplingRateParser mpegVersion byte2
@@ -203,13 +202,6 @@ layerValidator byte = case 0b0000_0011 .&. byte `shiftR` 1 of
   0b10 -> fail "Unexpected Layer 2 (2) frame"
   0b00 -> fail "Unexpected Layer \"reserved\" (0) frame"
   x -> fail $ "Impossible Layer value " <> show x
-
--- | Validates that the header byte doesn't declare the CRC protection.
-protectionValidator :: Word8 -> Parser ()
-protectionValidator byte = case 0b0000_0001 .&. byte of
-  1 -> pure ()
-  0 -> fail "Unexpected CRC-protected (0) frame"
-  x -> fail $ "Impossible Protection value " <> show x
 
 -- | Sampling rate of a frame; it's required to calculate the frame length.
 data SamplingRate
