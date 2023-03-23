@@ -25,7 +25,8 @@ newtype AudioDuration = AudioDuration { getAudioDuration :: Float }
 instance Show AudioDuration where
   show (AudioDuration d) = show d <> " s"
 
--- | Parses an MP3 file and returns the audio duration. An accepted MP3 file:
+-- | Parses an MP3 (MPEG1/MPEG2 Layer III) file and returns the audio duration.
+-- An accepted MP3 file:
 --
 -- - optionally starts with:
 --   - an ID3 v2.{2,3,4} tag, which may be followed by a single space or a
@@ -154,12 +155,12 @@ frameHeaderParser = do
   [byte0, byte1, byte2, _] <- A.count frameHeaderSize A.anyWord8 <?> "Incomplete frame header"
 
   frameSyncValidator (byte0, byte1)
-  mpegVersionValidator byte1
+  mpegVersion <- parseMPEGVersion byte1
   layerValidator byte1
   protectionValidator byte1
 
-  bitrate <- bitrateParser byte2
-  samplingRate <- samplingRateParser byte2
+  bitrate <- bitrateParser mpegVersion byte2
+  samplingRate <- samplingRateParser mpegVersion byte2
 
   let paddingSize = if testBit byte2 paddingBitIndex then 1 else 0
       contentsSize = frameSize bitrate samplingRate - frameHeaderSize + paddingSize
@@ -182,11 +183,14 @@ frameSyncValidator (b0, b1) =
   in unless isValid . fail $ printf "Invalid frame sync (0x%02x%02x, %c%c)" b0 b1 b0 b1
   where byte1Mask = 0b1110_0000
 
--- | Validates that the header byte declares MPEG Version 1.
-mpegVersionValidator :: Word8 -> Parser ()
-mpegVersionValidator byte = case 0b00000011 .&. byte `shiftR` 3 of
-  0b11 -> pure ()
-  0b10 -> fail "Unexpected MPEG version 2 (2) frame"
+-- | MPEG version of a given MP3 frame.
+data MPEGVersion = MPEG1 | MPEG2
+
+-- | Parses MPEG Version 1 or 2 from the header byte.
+parseMPEGVersion :: Word8 -> Parser MPEGVersion
+parseMPEGVersion byte = case 0b00000011 .&. byte `shiftR` 3 of
+  0b11 -> pure MPEG1
+  0b10 -> pure MPEG2
   0b00 -> fail "Unexpected MPEG version 2.5 (0) frame"
   0b01 -> fail "Unexpected MPEG version \"reserved\" (1) frame"
   x -> fail $ "Impossible MPEG version value " <> show x
@@ -208,16 +212,24 @@ protectionValidator byte = case 0b0000_0001 .&. byte of
   x -> fail $ "Impossible Protection value " <> show x
 
 -- | Sampling rate of a frame; it's required to calculate the frame length.
-data SamplingRate = SR32000Hz | SR44100Hz | SR48000Hz
+data SamplingRate
+  = SR16000Hz | SR22050Hz | SR24000Hz -- MPEG2
+  | SR32000Hz | SR44100Hz | SR48000Hz -- MPEG1
 
 instance Show SamplingRate where
+  show SR16000Hz = "16 kHz"
+  show SR22050Hz = "22.05 kHz"
+  show SR24000Hz = "24 kHz"
   show SR32000Hz = "32 kHz"
   show SR44100Hz = "44.1 kHz"
   show SR48000Hz = "48 kHz"
 
 -- | Bitrate of a frame; it's required to calculate the frame length.
 data Bitrate
-  = BR32kbps
+  = BR8kbps
+  | BR16kbps
+  | BR24kbps
+  | BR32kbps
   | BR40kbps
   | BR48kbps
   | BR56kbps
@@ -226,6 +238,7 @@ data Bitrate
   | BR96kbps
   | BR112kbps
   | BR128kbps
+  | BR144kbps
   | BR160kbps
   | BR192kbps
   | BR224kbps
@@ -233,39 +246,59 @@ data Bitrate
   | BR320kbps
 
 -- | Parses the sample rate from the frame byte.
-samplingRateParser :: Word8 -> Parser SamplingRate
-samplingRateParser byte = case 0b00000011 .&. shiftR byte 2 of
-  0b00 -> pure SR44100Hz
-  0b01 -> pure SR48000Hz
-  0b10 -> pure SR32000Hz
-  0b11 -> fail "Unexpected sampling rate \"reserved\" (3)"
-  x -> fail $ "Impossible sampling rate value " <> show x
+samplingRateParser :: MPEGVersion -> Word8 -> Parser SamplingRate
+samplingRateParser mpeg byte = case (mpeg, 0b00000011 .&. shiftR byte 2) of
+  (MPEG1, 0b00) -> pure SR44100Hz
+  (MPEG1, 0b01) -> pure SR48000Hz
+  (MPEG1, 0b10) -> pure SR32000Hz
+  (MPEG2, 0b00) -> pure SR22050Hz
+  (MPEG2, 0b01) -> pure SR24000Hz
+  (MPEG2, 0b10) -> pure SR16000Hz
+  (_, 0b11) -> fail "Unexpected sampling rate \"reserved\" (3)"
+  (_, x) -> fail $ "Impossible sampling rate value " <> show x
 
 -- | Parses the bitrate from the frame byte.
-bitrateParser :: Word8 -> Parser Bitrate
-bitrateParser byte = case shiftR byte 4 of
-  0b0001 -> pure BR32kbps
-  0b0010 -> pure BR40kbps
-  0b0011 -> pure BR48kbps
-  0b0100 -> pure BR56kbps
-  0b0101 -> pure BR64kbps
-  0b0110 -> pure BR80kbps
-  0b0111 -> pure BR96kbps
-  0b1000 -> pure BR112kbps
-  0b1001 -> pure BR128kbps
-  0b1010 -> pure BR160kbps
-  0b1011 -> pure BR192kbps
-  0b1100 -> pure BR224kbps
-  0b1101 -> pure BR256kbps
-  0b1110 -> pure BR320kbps
-  0b0000 -> fail "Unexpected bitrate \"free\" (0)"
-  0b1111 -> fail "Unexpected bitrate \"bad\" (15)"
-  x -> fail $ "Impossible bitrate value " <> show x
+bitrateParser :: MPEGVersion -> Word8 -> Parser Bitrate
+bitrateParser mpeg byte = case (mpeg, shiftR byte 4) of
+  (MPEG1, 0b0001) -> pure BR32kbps
+  (MPEG1, 0b0010) -> pure BR40kbps
+  (MPEG1, 0b0011) -> pure BR48kbps
+  (MPEG1, 0b0100) -> pure BR56kbps
+  (MPEG1, 0b0101) -> pure BR64kbps
+  (MPEG1, 0b0110) -> pure BR80kbps
+  (MPEG1, 0b0111) -> pure BR96kbps
+  (MPEG1, 0b1000) -> pure BR112kbps
+  (MPEG1, 0b1001) -> pure BR128kbps
+  (MPEG1, 0b1010) -> pure BR160kbps
+  (MPEG1, 0b1011) -> pure BR192kbps
+  (MPEG1, 0b1100) -> pure BR224kbps
+  (MPEG1, 0b1101) -> pure BR256kbps
+  (MPEG1, 0b1110) -> pure BR320kbps
+  (MPEG2, 0b0001) -> pure BR8kbps
+  (MPEG2, 0b0010) -> pure BR16kbps
+  (MPEG2, 0b0011) -> pure BR24kbps
+  (MPEG2, 0b0100) -> pure BR32kbps
+  (MPEG2, 0b0101) -> pure BR40kbps
+  (MPEG2, 0b0110) -> pure BR48kbps
+  (MPEG2, 0b0111) -> pure BR56kbps
+  (MPEG2, 0b1000) -> pure BR64kbps
+  (MPEG2, 0b1001) -> pure BR80kbps
+  (MPEG2, 0b1010) -> pure BR96kbps
+  (MPEG2, 0b1011) -> pure BR112kbps
+  (MPEG2, 0b1100) -> pure BR128kbps
+  (MPEG2, 0b1101) -> pure BR144kbps
+  (MPEG2, 0b1110) -> pure BR160kbps
+  (_, 0b0000) -> fail "Unexpected bitrate \"free\" (0)"
+  (_, 0b1111) -> fail "Unexpected bitrate \"bad\" (15)"
+  (_, x) -> fail $ "Impossible bitrate value " <> show x
 
--- | Returns the frame length based on 128 kb/s bitrate and the provided sample rate.
+-- | Returns the frame length based on the provided bitrate and sample rate.
 frameSize :: Bitrate -> SamplingRate -> Int
 frameSize br sr = floor @Float $ 144 * bitrateBitsPerSecond br / samplingRateHz sr
   where
+    bitrateBitsPerSecond BR8kbps   = 8000
+    bitrateBitsPerSecond BR16kbps  = 16000
+    bitrateBitsPerSecond BR24kbps  = 24000
     bitrateBitsPerSecond BR32kbps  = 32000
     bitrateBitsPerSecond BR40kbps  = 40000
     bitrateBitsPerSecond BR48kbps  = 48000
@@ -275,6 +308,7 @@ frameSize br sr = floor @Float $ 144 * bitrateBitsPerSecond br / samplingRateHz 
     bitrateBitsPerSecond BR96kbps  = 96000
     bitrateBitsPerSecond BR112kbps = 112000
     bitrateBitsPerSecond BR128kbps = 128000
+    bitrateBitsPerSecond BR144kbps = 144000
     bitrateBitsPerSecond BR160kbps = 160000
     bitrateBitsPerSecond BR192kbps = 192000
     bitrateBitsPerSecond BR224kbps = 224000
@@ -282,6 +316,9 @@ frameSize br sr = floor @Float $ 144 * bitrateBitsPerSecond br / samplingRateHz 
     bitrateBitsPerSecond BR320kbps = 320000
 
 samplingRateHz :: Num a => SamplingRate -> a
+samplingRateHz SR16000Hz = 16000
+samplingRateHz SR22050Hz = 22050
+samplingRateHz SR24000Hz = 24000
 samplingRateHz SR32000Hz = 32000
 samplingRateHz SR44100Hz = 44100
 samplingRateHz SR48000Hz = 48000

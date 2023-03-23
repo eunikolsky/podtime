@@ -1,31 +1,42 @@
 module Domain.MP3HeaderTypes
-  ( MP3FrameSettings(..)
+  ( FrameSettings(..)
+  , MP3FrameSettings(..)
   , Padding(..)
   , frameLength
+  , frameSettingsByte
   , paddingByte
 
   -- * these are reexported from `Domain.MPEG1Types` for now
   , MPEG1.Bitrate(..)
-  , MPEG1.FrameSettings(..)
   , MPEG1.SamplingRate(..)
   , MPEG1.ValidBitrateValue(..)
-  , MPEG1.frameSettingsByte
   ) where
 
 import Data.Bits
 import Data.Word
 import Domain.MPEG1Types qualified as MPEG1
+import Domain.MPEG2Types qualified as MPEG2
+
+data FrameSettings
+  = MPEG1FrameSettings !MPEG1.Bitrate !MPEG1.SamplingRate
+  | MPEG2FrameSettings !MPEG2.Bitrate !MPEG2.SamplingRate
 
 -- | MP3 frame header's settings which define the frame length (in bytes).
 data MP3FrameSettings = MP3FrameSettings
-  { mfFrameSettings :: !MPEG1.FrameSettings
+  { mfFrameSettings :: !FrameSettings
   , mfPadding :: !Padding
   }
 
 -- | Returns frame length for the `MP3FrameSettings`.
 frameLength :: MP3FrameSettings -> Maybe Int
 frameLength (MP3FrameSettings frameSettings padding) =
-  (+ paddingSize padding) <$> MPEG1.frameLength frameSettings
+  (+ paddingSize padding) <$> case frameSettings of
+    MPEG1FrameSettings br sr -> MPEG1.frameLength br sr
+    MPEG2FrameSettings br sr -> MPEG2.frameLength br sr
+
+frameSettingsByte :: FrameSettings -> Word8
+frameSettingsByte (MPEG1FrameSettings br sr) = MPEG1.frameSettingsByte br sr
+frameSettingsByte (MPEG2FrameSettings br sr) = MPEG2.frameSettingsByte br sr
 
 data Padding = Padding | NoPadding
 
