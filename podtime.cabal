@@ -54,11 +54,9 @@ library
     , ID3
     , ID3V1
     , MP3
-    , MP3Original
   build-depends:
       attoparsec
     , bytestring
-    , megaparsec
 
 executable podtime
   import:              common-options
