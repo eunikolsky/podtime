@@ -32,13 +32,11 @@ spec :: Episodes -> Spec
 spec (Episodes baseDir mp3s) =
   describe "mp3Parser" $ do
     forM_ mp3s $ \mp3 -> do
-      -- this test is disabled because the duration test (next) subsumes it;
-      -- however it's left here since it could be used for faster debugging
-      xit ("parses " <> ushow mp3) $ do
+      it ("parses " <> ushow mp3) $ do
         contents <- B.readFile $ baseDir </> mp3
         mp3Parser `shouldSucceedOn` contents
 
-      it ("parsed duration matches sox's duration: " <> ushow mp3) $ do
+      fit ("parsed duration matches sox's duration: " <> ushow mp3) $ do
         let filepath = baseDir </> mp3
         contents <- B.readFile filepath
         externalDuration <- getExternalAudioDuration filepath
