@@ -59,8 +59,8 @@ result `parsesDuration` expected =
       in when (abs diff > epsilon) . expectationFailure $ mconcat
         [ "parsed duration ", show actual
         , " doesn't match reference duration ", show expected
-        , "\nthe difference is ", show diff
-        , " (", showFFloat (Just 3) (getAudioDuration $ diff / expected * 100) ""
+        , "\nthe difference is ", showFFloat (Just 3) (getAudioDuration diff) ""
+        , "s (", showFFloat (Just 3) (getAudioDuration $ diff / expected * 100) ""
         , "%), more than ", show epsilon
         ]
 
