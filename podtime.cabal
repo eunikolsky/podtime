@@ -119,4 +119,5 @@ test-suite integration-test
     , hspec-attoparsec
     , hspec-core
     , podtime
+    , process
     , unicode-show
