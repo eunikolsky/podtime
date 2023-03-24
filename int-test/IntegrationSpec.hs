@@ -37,7 +37,7 @@ spec (Episodes baseDir mp3s) =
         mp3Parser `shouldSucceedOn` contents
 
     let mp3 = head mp3s
-    fit ("parsed duration matches ffmpeg's duration: " <> ushow mp3) $ do
+    fit ("parsed duration matches sox's duration: " <> ushow mp3) $ do
       let filepath = baseDir </> mp3
       contents <- B.readFile filepath
       externalDuration <- getExternalAudioDuration filepath
