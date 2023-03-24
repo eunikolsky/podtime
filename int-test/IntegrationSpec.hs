@@ -43,7 +43,7 @@ spec (Episodes baseDir mp3s) =
         contents ~> mp3Parser `parsesDuration` externalDuration
 
 -- | Checks that the parsed duration equals to the expected duration with the
--- error of at most 1 second.
+-- error of at most 0.1 seconds.
 parsesDuration :: Either String AudioDuration -> AudioDuration -> Expectation
 result `parsesDuration` expected =
   either (expectationFailure . errmsg) checkDuration result
@@ -54,7 +54,7 @@ result `parsesDuration` expected =
 
     checkDuration actual =
       let diff = expected - actual
-          epsilon = 1 :: AudioDuration
+          epsilon = 0.1 :: AudioDuration
       in when (abs diff > epsilon) . expectationFailure $ mconcat
         [ "parsed duration ", show actual
         , " doesn't match reference duration ", show expected
