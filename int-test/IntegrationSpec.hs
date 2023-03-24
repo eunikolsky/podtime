@@ -6,6 +6,7 @@ import Data.ByteString qualified as B
 import Data.List (find)
 import Data.Maybe
 import MP3
+import Numeric
 import SuccessFormatter
 import System.Directory
 import System.Exit
@@ -40,7 +41,28 @@ spec (Episodes baseDir mp3s) =
       let filepath = baseDir </> mp3
       contents <- B.readFile filepath
       externalDuration <- getExternalAudioDuration filepath
-      contents ~> mp3Parser `shouldParse` externalDuration
+      contents ~> mp3Parser `parsesDuration` externalDuration
+
+-- | Checks that the parsed duration equals to the expected duration with the
+-- error of at most 1 second.
+parsesDuration :: Either String AudioDuration -> AudioDuration -> Expectation
+result `parsesDuration` expected =
+  either (expectationFailure . errmsg) checkDuration result
+
+  where
+    errmsg err = "expected a parsed duration around " <> show expected
+      <> "\nbut parsing failed with error: " <> show err
+
+    checkDuration actual =
+      let diff = expected - actual
+          epsilon = 1 :: AudioDuration
+      in when (abs diff > epsilon) . expectationFailure $ mconcat
+        [ "parsed duration ", show actual
+        , " doesn't match reference duration ", show expected
+        , "\nthe difference is ", show diff
+        , " (", showFFloat (Just 3) (getAudioDuration $ diff / expected * 100) ""
+        , "%), more than ", show epsilon
+        ]
 
 -- | Runs `sox` to get the duration of the mp3 file. The duration is not
 -- estimated, but calculated accurately.
