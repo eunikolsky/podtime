@@ -31,17 +31,16 @@ main = do
 spec :: Episodes -> Spec
 spec (Episodes baseDir mp3s) =
   describe "mp3Parser" $ do
-    forM_ mp3s $ \mp3 ->
+    forM_ mp3s $ \mp3 -> do
       it ("parses " <> ushow mp3) $ do
         contents <- B.readFile $ baseDir </> mp3
         mp3Parser `shouldSucceedOn` contents
 
-    let mp3 = head mp3s
-    fit ("parsed duration matches sox's duration: " <> ushow mp3) $ do
-      let filepath = baseDir </> mp3
-      contents <- B.readFile filepath
-      externalDuration <- getExternalAudioDuration filepath
-      contents ~> mp3Parser `parsesDuration` externalDuration
+      fit ("parsed duration matches sox's duration: " <> ushow mp3) $ do
+        let filepath = baseDir </> mp3
+        contents <- B.readFile filepath
+        externalDuration <- getExternalAudioDuration filepath
+        contents ~> mp3Parser `parsesDuration` externalDuration
 
 -- | Checks that the parsed duration equals to the expected duration with the
 -- error of at most 1 second.
