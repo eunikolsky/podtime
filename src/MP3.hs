@@ -19,7 +19,7 @@ import ID3V1 qualified
 import Text.Printf
 
 -- | Duration of an MP3 file, in seconds.
-newtype AudioDuration = AudioDuration { getAudioDuration :: Float }
+newtype AudioDuration = AudioDuration { getAudioDuration :: Double }
   deriving newtype (Eq, Ord, Fractional, Num)
 
 instance Show AudioDuration where

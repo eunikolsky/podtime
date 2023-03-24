@@ -84,7 +84,7 @@ getExternalAudioDuration mp3 = getDuration <$> runSox
     getDuration output = fromJust $ do
       lengthWords <- find ((== "Length") . head) . fmap words $ lines output
       let lengthString = last lengthWords
-      AudioDuration <$> readMaybe @Float lengthString
+      AudioDuration <$> readMaybe lengthString
 
 -- | Contains a list of episodes relative to the base directory. This separation
 -- is necessary in order to shorten the test names.
