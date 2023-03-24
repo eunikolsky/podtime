@@ -40,3 +40,7 @@ int-testfw:
 .PHONY:
 testfw-seed:
 	@stack test --fast --file-watch --ta="--seed $${SEED}" $(MAIN_TEST_TARGET)
+
+.PHONY:
+buildfw:
+	@stack build --fast --file-watch

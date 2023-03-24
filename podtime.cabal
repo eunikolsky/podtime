@@ -69,7 +69,8 @@ executable podtime
   build-depends:
       podtime
     , async
-    , bytestring
+    , conduit
+    , conduit-extra
     , directory
     , filepath
     , process
