@@ -62,7 +62,9 @@ executable podtime
   import:              common-options
   hs-source-dirs:      program
   main-is:             Main.hs
-  other-modules:       Paths_podtime
+  other-modules:
+      Database
+    , Paths_podtime
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       podtime

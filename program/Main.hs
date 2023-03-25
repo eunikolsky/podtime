@@ -1,5 +1,3 @@
-{-# LANGUAGE QuasiQuotes #-}
-
 module Main (main) where
 
 import           Conduit
@@ -17,8 +15,8 @@ import           System.Environment (getArgs)
 import           System.FilePath.Posix ((</>))
 import           System.IO (IOMode(..), withBinaryFile)
 import           System.Process (StdStream(..), cwd, proc, readCreateProcess, std_err)
-import           Text.RawString.QQ
 
+import           Database
 import qualified MP3
 import           Paths_podtime (version)
 
@@ -64,31 +62,6 @@ subgroups _ [] = []
 subgroups maxLen xs =
   let (group, rest) = splitAt maxLen xs
   in (group : subgroups maxLen rest)
-
--- | Returns a list of all podcasts in gPodder.
-getPodcasts :: Connection -> IO [Int]
-getPodcasts conn = do
-  ids <- query_ conn "SELECT id FROM podcast" :: IO [Only Int]
-  return $ fromOnly <$> ids
-
--- | Returns the filenames of all not-listened-to episodes of the @podcast@ by
--- its id. Only @.mp3@ files are returned.
-getNewEpisodes :: Connection -> Int -> IO [FilePath]
-getNewEpisodes conn podcast = do
-  results <- queryNamed conn
-    [r|
-      SELECT p.download_folder || '/' || e.download_filename
-      FROM episode e
-      JOIN podcast p ON e.podcast_id = p.id
-      WHERE p.id = :podcast
-        AND e.state = 1
-        AND e.published >= (
-          SELECT MIN(published) FROM episode WHERE podcast_id = :podcast AND state = 1 AND is_new
-        )
-        AND e.download_filename LIKE '%.mp3'
-    |]
-    [":podcast" := podcast]
-  pure $ fromOnly <$> results
 
 -- | Retrieves the durations of the podasts at the @paths@ (using `sox`)
 -- and sums them up. The @paths@ should be relative to @gPodderDownloads@;
