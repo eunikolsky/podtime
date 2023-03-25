@@ -7,7 +7,9 @@ module Stat
 import Conduit ((.|), runConduitRes, sourceFile)
 import Data.Conduit.Combinators (stdout)
 import Data.Text (Text)
+import Data.Text qualified as T (pack)
 import Data.Text.IO qualified as T (appendFile)
+import Data.Time (LocalTime, defaultTimeLocale, formatTime, getZonedTime, zonedTimeToLocalTime)
 import Lib (formatDuration)
 import MP3 (AudioDuration)
 import System.Directory (createDirectoryIfMissing)
@@ -15,15 +17,26 @@ import System.Environment.XDG.BaseDir (getUserDataDir)
 import System.FilePath ((</>))
 
 -- | The result of running the program, interesting to the user.
-newtype Stat = Stat { duration :: AudioDuration }
+data Stat = Stat
+  { duration :: !AudioDuration
+  -- ^ total duration of new podcast episodes
+  , time :: !LocalTime
+  -- ^ time when the result was generated
+  }
 
 -- | Renders a `Stat` value as `Text`.
 showStat :: Stat -> Text
-showStat = formatDuration . duration
+showStat (Stat { duration, time }) = mconcat
+  [ T.pack $ formatTime defaultTimeLocale "%F %T" time
+  , " | "
+  , formatDuration duration
+  ]
 
 -- | Creates a `Stat` value.
-mkStat :: AudioDuration -> Stat
-mkStat duration = Stat { duration }
+mkStat :: AudioDuration -> IO Stat
+mkStat duration = do
+  now <- zonedTimeToLocalTime <$> getZonedTime
+  pure Stat { duration, time = now }
 
 -- | Appends the `Stat` value to the program's log file.
 recordStat :: Stat -> IO ()

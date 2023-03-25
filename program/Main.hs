@@ -33,7 +33,7 @@ getDuration file = runConduitRes $ sourceFile file .| sinkParser mp3Parser
 recordAndLogStats :: IO ()
 recordAndLogStats = do
   total <- getTotalDuration
-  let stat = mkStat total
+  stat <- mkStat total
   recordStat stat
   printStats
 

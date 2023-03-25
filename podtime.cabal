@@ -80,6 +80,7 @@ executable podtime
     , raw-strings-qq
     , sqlite-simple
     , text
+    , time
     , unliftio
     , xdg-basedir
 
