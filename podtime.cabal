@@ -81,6 +81,7 @@ executable podtime
     , sqlite-simple
     , text
     , unliftio
+    , xdg-basedir
 
 test-suite unit-test
   import:              common-options
