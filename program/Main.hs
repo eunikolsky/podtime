@@ -1,24 +1,24 @@
 module Main (main) where
 
-import           Conduit
-import           Control.Concurrent (getNumCapabilities)
-import           Control.Concurrent.Async (forConcurrently)
-import           Control.Monad (filterM)
-import           Data.Conduit.Attoparsec
-import           Data.List (genericLength)
-import           Data.Time.Clock (DiffTime, picosecondsToDiffTime)
-import           Data.Time.Format (defaultTimeLocale, formatTime)
-import           Data.Version (showVersion)
-import           Database.SQLite.Simple
-import           System.Directory (doesFileExist, getHomeDirectory)
-import           System.Environment (getArgs)
-import           System.FilePath.Posix ((</>))
-import           System.IO (IOMode(..), withBinaryFile)
-import           System.Process (StdStream(..), cwd, proc, readCreateProcess, std_err)
+import Conduit
+import Control.Concurrent (getNumCapabilities)
+import Control.Concurrent.Async (forConcurrently)
+import Control.Monad (filterM)
+import Data.Conduit.Attoparsec
+import Data.List (genericLength)
+import Data.Time.Clock (DiffTime, picosecondsToDiffTime)
+import Data.Time.Format (defaultTimeLocale, formatTime)
+import Data.Version (showVersion)
+import Database.SQLite.Simple
+import System.Directory (doesFileExist, getHomeDirectory)
+import System.Environment (getArgs)
+import System.FilePath.Posix ((</>))
+import System.IO (IOMode(..), withBinaryFile)
+import System.Process (StdStream(..), cwd, proc, readCreateProcess, std_err)
 
-import           Database
-import qualified MP3
-import           Paths_podtime (version)
+import Database
+import MP3 qualified
+import Paths_podtime (version)
 
 main :: IO ()
 main = do
