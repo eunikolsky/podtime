@@ -35,16 +35,10 @@ printTotalDuration = do
   let gPodderHome = homeDir </> "gPodder"
       gPodderDownloads = gPodderHome </> "Downloads"
   allEpisodes <- withDatabase (gPodderHome </> "Database") $ do
-    podcasts <- getPodcasts
-    fmap concat . traverse getNewEpisodes $ podcasts
+    podcasts :: [Int] <- getPodcasts
+    episodeLists :: [[FilePath]] <- traverse getNewEpisodes podcasts
+    pure $ concat episodeLists
 
   -- FIXME return the file presense check?
   durations <- pooledMapConcurrently getDuration $ fmap (gPodderDownloads </>) allEpisodes
   putStrLn . formatDuration . sum $ durations
-
-{-
- podcasts :: [Int]
- fmap getNewEpisodes podcasts :: [IO [String]]
- traverse getNewEpisodes podcasts :: IO [[String]]
- fmap join . traverse getNewEpisodes $ podcasts :: IO [String]
- -}
