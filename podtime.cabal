@@ -73,6 +73,7 @@ executable podtime
     , conduit-extra
     , directory
     , filepath
+    , mtl
     , process
     , raw-strings-qq
     , sqlite-simple

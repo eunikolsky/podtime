@@ -39,9 +39,9 @@ printTotalDuration :: Int -> IO ()
 printTotalDuration caps = do
   homeDir <- getHomeDirectory
   let gPodderHome = homeDir </> "gPodder"
-  allEpisodes <- withDatabase (gPodderHome </> "Database") $ \conn -> do
-    podcasts <- getPodcasts conn
-    fmap concat . traverse (getNewEpisodes conn) $ podcasts
+  allEpisodes <- withDatabase (gPodderHome </> "Database") $ do
+    podcasts <- getPodcasts
+    fmap concat . traverse getNewEpisodes $ podcasts
 
   let episodeGroups = subgroups (ceiling @Double $ genericLength allEpisodes / fromIntegral caps) allEpisodes
   durations <- forConcurrently episodeGroups $ sumPodcastDurations (gPodderHome </> "Downloads")

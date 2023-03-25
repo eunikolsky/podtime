@@ -6,29 +6,32 @@ module Database
   , withDatabase
   ) where
 
+import Control.Monad.Reader (ReaderT, ask, liftIO, runReaderT)
 import Database.SQLite.Simple (Connection, NamedParam((:=)), Only(..),
                               query_, queryNamed, withConnection)
 import Text.RawString.QQ (r)
 
 -- | Internal, opaque type to wrap the database `Connection`.
-newtype DB = DB Connection
+type DB a = ReaderT Connection IO a
 
 -- | Wraps `withConnection` in order not to require other modules to import
 -- `Database.SQLite.Simple`.
-withDatabase :: FilePath -> (DB -> IO a) -> IO a
-withDatabase file f = withConnection file $ f . DB
+withDatabase :: FilePath -> DB a -> IO a
+withDatabase file f = withConnection file $ runReaderT f
 
 -- | Returns a list of all podcasts in gPodder.
-getPodcasts :: DB -> IO [Int]
-getPodcasts (DB conn) = do
-  ids <- query_ conn "SELECT id FROM podcast" :: IO [Only Int]
+getPodcasts :: DB [Int]
+getPodcasts = do
+  conn <- ask
+  ids :: [Only Int] <- liftIO $ query_ conn "SELECT id FROM podcast"
   return $ fromOnly <$> ids
 
 -- | Returns the filenames of all not-listened-to episodes of the @podcast@ by
 -- its id. Only @.mp3@ files are returned.
-getNewEpisodes :: DB -> Int -> IO [FilePath]
-getNewEpisodes (DB conn) podcast = do
-  results <- queryNamed conn
+getNewEpisodes :: Int -> DB [FilePath]
+getNewEpisodes podcast = do
+  conn <- ask
+  results <- liftIO $ queryNamed conn
     [r|
       SELECT p.download_folder || '/' || e.download_filename
       FROM episode e
