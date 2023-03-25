@@ -9,9 +9,9 @@ import System.FilePath.Posix ((</>))
 import UnliftIO.Async (pooledMapConcurrently)
 
 import GPodderDatabase (getNewEpisodes, getPodcasts, withDatabase)
-import Lib (formatDuration)
 import MP3 (AudioDuration(..), mp3Parser)
 import Paths_podtime (version)
+import Stat (mkStat)
 
 main :: IO ()
 main = do
@@ -41,4 +41,4 @@ printTotalDuration = do
 
   -- FIXME return the file presense check?
   durations <- pooledMapConcurrently getDuration $ fmap (gPodderDownloads </>) allEpisodes
-  putStrLn . formatDuration . sum $ durations
+  print . mkStat $ sum durations
