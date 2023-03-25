@@ -5,7 +5,7 @@ module Database
   , getPodcasts
   ) where
 
-import Database.SQLite.Simple
+import Database.SQLite.Simple (Connection, NamedParam((:=)), Only(..), query_, queryNamed)
 import Text.RawString.QQ (r)
 
 -- | Returns a list of all podcasts in gPodder.

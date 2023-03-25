@@ -1,23 +1,23 @@
 module Main (main) where
 
-import Conduit
+import Conduit ((.|), runConduitRes, sourceFile)
 import Control.Concurrent (getNumCapabilities)
 import Control.Concurrent.Async (forConcurrently)
 import Control.Monad (filterM)
-import Data.Conduit.Attoparsec
+import Data.Conduit.Attoparsec (sinkParser)
 import Data.List (genericLength)
 import Data.Time.Clock (DiffTime, picosecondsToDiffTime)
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import Data.Version (showVersion)
-import Database.SQLite.Simple
+import Database.SQLite.Simple (withConnection)
 import System.Directory (doesFileExist, getHomeDirectory)
 import System.Environment (getArgs)
 import System.FilePath.Posix ((</>))
 import System.IO (IOMode(..), withBinaryFile)
 import System.Process (StdStream(..), cwd, proc, readCreateProcess, std_err)
 
-import Database
-import MP3 qualified
+import Database (getNewEpisodes, getPodcasts)
+import MP3 (mp3Parser, getAudioDuration)
 import Paths_podtime (version)
 
 main :: IO ()
@@ -31,8 +31,8 @@ main = do
 -- | Print the audio duration of a single MP3 file.
 printDuration :: FilePath -> IO ()
 printDuration file = do
-  d <- runConduitRes $ sourceFile file .| sinkParser MP3.mp3Parser
-  print $ MP3.getAudioDuration d
+  d <- runConduitRes $ sourceFile file .| sinkParser mp3Parser
+  print $ getAudioDuration d
 
 -- | The main function of the program: calculates and prints the total
 -- duration of the new episodes.
