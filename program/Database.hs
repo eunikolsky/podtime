@@ -3,21 +3,31 @@
 module Database
   ( getNewEpisodes
   , getPodcasts
+  , withDatabase
   ) where
 
-import Database.SQLite.Simple (Connection, NamedParam((:=)), Only(..), query_, queryNamed)
+import Database.SQLite.Simple (Connection, NamedParam((:=)), Only(..),
+                              query_, queryNamed, withConnection)
 import Text.RawString.QQ (r)
 
+-- | Internal, opaque type to wrap the database `Connection`.
+newtype DB = DB Connection
+
+-- | Wraps `withConnection` in order not to require other modules to import
+-- `Database.SQLite.Simple`.
+withDatabase :: FilePath -> (DB -> IO a) -> IO a
+withDatabase file f = withConnection file $ f . DB
+
 -- | Returns a list of all podcasts in gPodder.
-getPodcasts :: Connection -> IO [Int]
-getPodcasts conn = do
+getPodcasts :: DB -> IO [Int]
+getPodcasts (DB conn) = do
   ids <- query_ conn "SELECT id FROM podcast" :: IO [Only Int]
   return $ fromOnly <$> ids
 
 -- | Returns the filenames of all not-listened-to episodes of the @podcast@ by
 -- its id. Only @.mp3@ files are returned.
-getNewEpisodes :: Connection -> Int -> IO [FilePath]
-getNewEpisodes conn podcast = do
+getNewEpisodes :: DB -> Int -> IO [FilePath]
+getNewEpisodes (DB conn) podcast = do
   results <- queryNamed conn
     [r|
       SELECT p.download_folder || '/' || e.download_filename

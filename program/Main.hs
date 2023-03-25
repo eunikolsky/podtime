@@ -9,14 +9,13 @@ import Data.List (genericLength)
 import Data.Time.Clock (DiffTime, picosecondsToDiffTime)
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import Data.Version (showVersion)
-import Database.SQLite.Simple (withConnection)
 import System.Directory (doesFileExist, getHomeDirectory)
 import System.Environment (getArgs)
 import System.FilePath.Posix ((</>))
 import System.IO (IOMode(..), withBinaryFile)
 import System.Process (StdStream(..), cwd, proc, readCreateProcess, std_err)
 
-import Database (getNewEpisodes, getPodcasts)
+import Database (getNewEpisodes, getPodcasts, withDatabase)
 import MP3 (mp3Parser, getAudioDuration)
 import Paths_podtime (version)
 
@@ -40,7 +39,7 @@ printTotalDuration :: Int -> IO ()
 printTotalDuration caps = do
   homeDir <- getHomeDirectory
   let gPodderHome = homeDir </> "gPodder"
-  allEpisodes <- withConnection (gPodderHome </> "Database") $ \conn -> do
+  allEpisodes <- withDatabase (gPodderHome </> "Database") $ \conn -> do
     podcasts <- getPodcasts conn
     fmap concat . traverse (getNewEpisodes conn) $ podcasts
 
