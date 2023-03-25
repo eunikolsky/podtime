@@ -14,8 +14,8 @@ import System.IO (IOMode(..), withBinaryFile)
 import System.Process (StdStream(..), cwd, proc, readCreateProcess, std_err)
 
 import Database (getNewEpisodes, getPodcasts, withDatabase)
-import Lib (formatDuration, secondsToDiffTime, subgroups)
-import MP3 (mp3Parser, getAudioDuration)
+import Lib (formatDuration, subgroups)
+import MP3 (AudioDuration(..), mp3Parser)
 import Paths_podtime (version)
 
 main :: IO ()
@@ -44,7 +44,7 @@ printTotalDuration caps = do
 
   let episodeGroups = subgroups (ceiling @Double $ genericLength allEpisodes / fromIntegral caps) allEpisodes
   durations <- forConcurrently episodeGroups $ sumPodcastDurations (gPodderHome </> "Downloads")
-  putStrLn . formatDuration . secondsToDiffTime . sum $ durations
+  putStrLn . formatDuration . sum $ durations
 
 {-
  podcasts :: [Int]
@@ -56,12 +56,12 @@ printTotalDuration caps = do
 -- | Retrieves the durations of the podasts at the @paths@ (using `sox`)
 -- and sums them up. The @paths@ should be relative to @gPodderDownloads@;
 -- missing files are skipped.
-sumPodcastDurations :: FilePath -> [String] -> IO Double
+sumPodcastDurations :: FilePath -> [String] -> IO AudioDuration
 sumPodcastDurations gPodderDownloads paths = do
   existingPaths <- filterM (doesFileExist . (gPodderDownloads </>)) paths
   withBinaryFile "/dev/null" WriteMode $ \dev_null -> do
     stdout <- readCreateProcess (sox existingPaths dev_null) ""
-    return . sum . fmap read . lines $ stdout
+    return . sum . fmap (AudioDuration . read) . lines $ stdout
 
   where
     sox existingPaths dev_null = (proc "sox" (["--info", "-D"] <> existingPaths))
