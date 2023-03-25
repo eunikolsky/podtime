@@ -6,8 +6,6 @@ import Control.Concurrent.Async (forConcurrently)
 import Control.Monad (filterM)
 import Data.Conduit.Attoparsec (sinkParser)
 import Data.List (genericLength)
-import Data.Time.Clock (DiffTime, picosecondsToDiffTime)
-import Data.Time.Format (defaultTimeLocale, formatTime)
 import Data.Version (showVersion)
 import System.Directory (doesFileExist, getHomeDirectory)
 import System.Environment (getArgs)
@@ -16,6 +14,7 @@ import System.IO (IOMode(..), withBinaryFile)
 import System.Process (StdStream(..), cwd, proc, readCreateProcess, std_err)
 
 import Database (getNewEpisodes, getPodcasts, withDatabase)
+import Lib (formatDuration, secondsToDiffTime, subgroups)
 import MP3 (mp3Parser, getAudioDuration)
 import Paths_podtime (version)
 
@@ -54,14 +53,6 @@ printTotalDuration caps = do
  fmap join . traverse getNewEpisodes $ podcasts :: IO [String]
  -}
 
--- | Splits the list @xs@ into subgroups such that each one contains
--- @maxLen@ items (the last one may contain fewer items).
-subgroups :: Int -> [a] -> [[a]]
-subgroups _ [] = []
-subgroups maxLen xs =
-  let (group, rest) = splitAt maxLen xs
-  in (group : subgroups maxLen rest)
-
 -- | Retrieves the durations of the podasts at the @paths@ (using `sox`)
 -- and sums them up. The @paths@ should be relative to @gPodderDownloads@;
 -- missing files are skipped.
@@ -77,13 +68,3 @@ sumPodcastDurations gPodderDownloads paths = do
       { cwd = Just gPodderDownloads
       , std_err = UseHandle dev_null
       }
-
--- | Converts the floating-point @duration@ to @DiffTime@.
--- The standard function in @Data.Time.Clock@ takes an @Integer@.
-secondsToDiffTime :: Double -> DiffTime
-secondsToDiffTime = picosecondsToDiffTime . floor . (* picosecondsInSecond)
-  where picosecondsInSecond = 1e12
-
--- | Formats the duration in seconds to a more human-readable format.
-formatDuration :: DiffTime -> String
-formatDuration = formatTime defaultTimeLocale "%dd %02H:%02M:%02S"

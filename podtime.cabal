@@ -53,10 +53,12 @@ library
       AttoparsecExtra
     , ID3
     , ID3V1
+    , Lib
     , MP3
   build-depends:
       attoparsec
     , bytestring
+    , time
 
 executable podtime
   import:              common-options
@@ -77,7 +79,6 @@ executable podtime
     , process
     , raw-strings-qq
     , sqlite-simple
-    , time
 
 test-suite unit-test
   import:              common-options
