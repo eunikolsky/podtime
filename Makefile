@@ -17,8 +17,15 @@ check-test:
 	stack --verbosity error test --fast --ta='-f silent' $(MAIN_TEST_TARGET)
 
 .PHONY:
-check-hlint:
-	hlint -j4 src program test int-test
+check-hlint: check-hlint-other check-hlint-program
+
+.PHONY:
+check-hlint-program:
+	hlint -j4 -h program/.hlint.yaml program
+
+.PHONY:
+check-hlint-other:
+	hlint -j4 src test int-test
 
 .PHONY:
 testd:

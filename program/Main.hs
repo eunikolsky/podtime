@@ -9,9 +9,9 @@ import System.FilePath.Posix ((</>))
 import UnliftIO.Async (pooledMapConcurrently)
 
 import GPodderDatabase (getNewEpisodes, getPodcasts, withDatabase)
-import Lib (formatDuration)
 import MP3 (AudioDuration(..), mp3Parser)
 import Paths_podtime (version)
+import Stat (mkStat, printStats, recordStat)
 
 main :: IO ()
 main = do
@@ -19,7 +19,7 @@ main = do
   case args of
     ["-v"] -> putStrLn . showVersion $ version
     [file] -> getDuration file >>= print . getAudioDuration
-    _ -> printTotalDuration
+    _ -> recordAndLogStats
 
 -- | Returns the audio duration of a single MP3 file. Throws an IO exception
 -- if parsing failed.
@@ -27,24 +27,27 @@ main = do
 getDuration :: FilePath -> IO AudioDuration
 getDuration file = runConduitRes $ sourceFile file .| sinkParser mp3Parser
 
--- | The main function of the program: calculates and prints the total
--- duration of the new episodes.
-printTotalDuration :: IO ()
-printTotalDuration = do
+-- | The main function of the program: calculates the total duration of the new
+-- episodes, appends a stat line to the log file, and prints stat lines from the
+-- log.
+recordAndLogStats :: IO ()
+recordAndLogStats = do
+  total <- getTotalDuration
+  stat <- mkStat total
+  recordStat stat
+  printStats
+
+-- | Calculates the total duration of new podcast episodes in the gPodder database.
+getTotalDuration :: IO AudioDuration
+getTotalDuration = do
   homeDir <- getHomeDirectory
   let gPodderHome = homeDir </> "gPodder"
       gPodderDownloads = gPodderHome </> "Downloads"
-  allEpisodes <- withDatabase (gPodderHome </> "Database") $ do
-    podcasts <- getPodcasts
-    fmap concat . traverse getNewEpisodes $ podcasts
+  episodes <- withDatabase (gPodderHome </> "Database") $ do
+    podcasts :: [Int] <- getPodcasts
+    episodeLists :: [[FilePath]] <- traverse getNewEpisodes podcasts
+    pure $ concat episodeLists
 
   -- FIXME return the file presense check?
-  durations <- pooledMapConcurrently getDuration $ fmap (gPodderDownloads </>) allEpisodes
-  putStrLn . formatDuration . sum $ durations
-
-{-
- podcasts :: [Int]
- fmap getNewEpisodes podcasts :: [IO [String]]
- traverse getNewEpisodes podcasts :: IO [[String]]
- fmap join . traverse getNewEpisodes $ podcasts :: IO [String]
- -}
+  durations <- pooledMapConcurrently getDuration $ fmap (gPodderDownloads </>) episodes
+  pure $ sum durations

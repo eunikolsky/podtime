@@ -1,0 +1,3 @@
+- modules:
+  # require all imports in `program/` to be explicit or qualified
+  - {name: '**', importStyle: explicitOrQualified, qualifiedStyle: post}
