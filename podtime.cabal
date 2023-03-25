@@ -70,15 +70,14 @@ executable podtime
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       podtime
-    , async
     , conduit
     , conduit-extra
     , directory
     , filepath
     , mtl
-    , process
     , raw-strings-qq
     , sqlite-simple
+    , unliftio
 
 test-suite unit-test
   import:              common-options

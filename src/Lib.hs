@@ -1,6 +1,5 @@
 module Lib
   ( formatDuration
-  , subgroups
   ) where
 
 import Data.Time.Clock (DiffTime, picosecondsToDiffTime)
@@ -16,11 +15,3 @@ durationToDiffTime = picosecondsToDiffTime . floor . (* picosecondsInSecond) . g
 -- | Formats the audio duration to a more human-readable, simple format.
 formatDuration :: AudioDuration -> String
 formatDuration = formatTime defaultTimeLocale "%dd %02H:%02M:%02S" . durationToDiffTime
-
--- | Splits the list @xs@ into subgroups such that each one contains
--- @maxLen@ items (the last one may contain fewer items).
-subgroups :: Int -> [a] -> [[a]]
-subgroups _ [] = []
-subgroups maxLen xs =
-  let (group, rest) = splitAt maxLen xs
-  in (group : subgroups maxLen rest)

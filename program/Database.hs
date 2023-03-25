@@ -27,7 +27,8 @@ getPodcasts = do
   return $ fromOnly <$> ids
 
 -- | Returns the filenames of all not-listened-to episodes of the @podcast@ by
--- its id. Only @.mp3@ files are returned.
+-- its id. Only @.mp3@ files are returned. The filenames are relative to
+-- gPodder's download directory (they look like `podcast/episode.mp3`).
 getNewEpisodes :: Int -> DB [FilePath]
 getNewEpisodes podcast = do
   conn <- ask
