@@ -2,6 +2,7 @@ module Main (main) where
 
 import Conduit ((.|), runConduitRes, sourceFile)
 import Data.Conduit.Attoparsec (sinkParser)
+import Data.Text.IO qualified as T (putStrLn)
 import Data.Version (showVersion)
 import System.Directory (getHomeDirectory)
 import System.Environment (getArgs)
@@ -11,7 +12,7 @@ import UnliftIO.Async (pooledMapConcurrently)
 import GPodderDatabase (getNewEpisodes, getPodcasts, withDatabase)
 import MP3 (AudioDuration(..), mp3Parser)
 import Paths_podtime (version)
-import Stat (mkStat)
+import Stat (mkStat, showStat)
 
 main :: IO ()
 main = do
@@ -41,4 +42,5 @@ printTotalDuration = do
 
   -- FIXME return the file presense check?
   durations <- pooledMapConcurrently getDuration $ fmap (gPodderDownloads </>) allEpisodes
-  print . mkStat $ sum durations
+  let stat = mkStat $ sum durations
+  T.putStrLn $ showStat stat

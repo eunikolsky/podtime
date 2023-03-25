@@ -58,6 +58,7 @@ library
   build-depends:
       attoparsec
     , bytestring
+    , text
     , time
 
 executable podtime
@@ -78,6 +79,7 @@ executable podtime
     , mtl
     , raw-strings-qq
     , sqlite-simple
+    , text
     , unliftio
 
 test-suite unit-test
