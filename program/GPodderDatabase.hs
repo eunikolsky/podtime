@@ -1,6 +1,6 @@
 {-# LANGUAGE QuasiQuotes #-}
 
-module Database
+module GPodderDatabase
   ( getNewEpisodes
   , getPodcasts
   , withDatabase

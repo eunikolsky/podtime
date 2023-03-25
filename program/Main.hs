@@ -8,7 +8,7 @@ import System.Environment (getArgs)
 import System.FilePath.Posix ((</>))
 import UnliftIO.Async (pooledMapConcurrently)
 
-import Database (getNewEpisodes, getPodcasts, withDatabase)
+import GPodderDatabase (getNewEpisodes, getPodcasts, withDatabase)
 import Lib (formatDuration)
 import MP3 (AudioDuration(..), mp3Parser)
 import Paths_podtime (version)
