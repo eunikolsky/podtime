@@ -5,14 +5,14 @@ module Stat
   , recordStat
   ) where
 
-import Conduit ((.|), runConduitRes, sourceFile)
-import Data.Conduit.Combinators (stdout)
+import Conduit ((.|), decodeUtf8C, linesUnboundedC, runConduitRes, sourceFile)
+import ConduitExtra (takeLastC)
 import Data.Text (Text)
-import Data.Text qualified as T (intercalate, pack)
-import Data.Text.IO qualified as T (appendFile)
+import Data.Text qualified as T (intercalate, pack, unlines)
+import Data.Text.IO qualified as T (appendFile, putStr)
 import Data.Time (LocalTime, NominalDiffTime, defaultTimeLocale, formatTime, getZonedTime, zonedTimeToLocalTime)
 import Data.Version (Version, showVersion)
-import Data.Word (Word16)
+import Data.Word (Word8, Word16)
 import Lib (formatDuration)
 import MP3 (AudioDuration)
 import Paths_podtime qualified as Paths (version)
@@ -60,14 +60,20 @@ recordStat stat = do
   logFilepath <- getLogFilepath
   T.appendFile logFilepath $ showStat stat <> "\n"
 
--- | Prints the program's log file, which contains serialized `Stat` values.
-printStats :: IO ()
-printStats = do
+-- | Prints the last `n` items from the program's log file, which contains
+-- serialized `Stat` values.
+printStats :: Word8 -> IO ()
+printStats n = do
   logFilepath <- getLogFilepath
-  runConduitRes $
-    -- there is no conduit to source file as `Text` strings, so this uses the
-    -- `ByteString` version, which is actually fine for this case
-    sourceFile logFilepath .| stdout
+  -- FIXME move output into the conduit
+  stats <- runConduitRes $
+    -- line-by-line file reading from:
+    -- https://stackoverflow.com/questions/20127318/read-lines-from-a-file-inside-a-zip-archive-using-haskells-zip-conduit
+    sourceFile logFilepath
+      .| decodeUtf8C
+      .| linesUnboundedC
+      .| takeLastC n
+  T.putStr $ T.unlines stats
 
 -- | Returns the filepath to the log file in the XDG data directory.
 getLogFilepath :: IO FilePath
