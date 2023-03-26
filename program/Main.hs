@@ -11,7 +11,7 @@ import UnliftIO.Async (pooledMapConcurrently)
 import GPodderDatabase (getNewEpisodes, getPodcasts, withDatabase)
 import MP3 (AudioDuration(..), mp3Parser)
 import Paths_podtime (version)
-import Stat (mkStat, printStats, recordStat)
+import Stat (EpisodeCount, mkStat, printStats, recordStat)
 
 main :: IO ()
 main = do
@@ -38,7 +38,7 @@ recordAndLogStats = do
   printStats
 
 -- | Calculates the total duration of new podcast episodes in the gPodder database.
-getTotalDuration :: IO AudioDuration
+getTotalDuration :: IO (AudioDuration, EpisodeCount)
 getTotalDuration = do
   homeDir <- getHomeDirectory
   let gPodderHome = homeDir </> "gPodder"
@@ -50,4 +50,4 @@ getTotalDuration = do
 
   -- FIXME return the file presense check?
   durations <- pooledMapConcurrently getDuration $ fmap (gPodderDownloads </>) episodes
-  pure $ sum durations
+  pure (sum durations, fromIntegral $ length episodes)
