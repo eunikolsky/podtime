@@ -10,7 +10,7 @@ import Data.Conduit.Combinators (stdout)
 import Data.Text (Text)
 import Data.Text qualified as T (intercalate, pack)
 import Data.Text.IO qualified as T (appendFile)
-import Data.Time (LocalTime, defaultTimeLocale, formatTime, getZonedTime, zonedTimeToLocalTime)
+import Data.Time (LocalTime, NominalDiffTime, defaultTimeLocale, formatTime, getZonedTime, zonedTimeToLocalTime)
 import Data.Version (Version, showVersion)
 import Data.Word (Word16)
 import Lib (formatDuration)
@@ -33,22 +33,26 @@ data Stat = Stat
   -- ^ the amount of episodes contributing to the total duration
   , version :: !Version
   -- ^ version of the program that generated the result
+  , elapsedDuration :: !NominalDiffTime
+  -- ^ wall time duration that it took to calculate the result
   }
 
 -- | Renders a `Stat` value as `Text`.
 showStat :: Stat -> Text
-showStat (Stat { duration, time, episodeCount, version }) = T.intercalate " | "
+showStat (Stat { duration, time, episodeCount, version, elapsedDuration }) = T.intercalate " | "
   [ T.pack $ formatTime defaultTimeLocale "%F %T" time
   , formatDuration duration
   , T.pack $ show episodeCount
   , T.pack $ showVersion version
+  , T.pack $ formatTime defaultTimeLocale "%Es" elapsedDuration
   ]
 
--- | Creates a `Stat` value.
-mkStat :: (AudioDuration, EpisodeCount) -> IO Stat
-mkStat (duration, episodeCount) = do
+-- | Creates a `Stat` value with the total duration, episode count and elapsed
+-- duration.
+mkStat :: (AudioDuration, EpisodeCount) -> NominalDiffTime -> IO Stat
+mkStat (duration, episodeCount) elapsedDuration = do
   now <- zonedTimeToLocalTime <$> getZonedTime
-  pure Stat { duration, time = now, episodeCount, version = Paths.version }
+  pure Stat { duration, time = now, episodeCount, version = Paths.version, elapsedDuration }
 
 -- | Appends the `Stat` value to the program's log file.
 recordStat :: Stat -> IO ()
