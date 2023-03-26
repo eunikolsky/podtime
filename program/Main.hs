@@ -45,6 +45,7 @@ getTotalDuration = do
   homeDir <- getHomeDirectory
   let gPodderHome = homeDir </> "gPodder"
       gPodderDownloads = gPodderHome </> "Downloads"
+  -- TODO stream through conduit
   episodes <- withDatabase (gPodderHome </> "Database") $ do
     podcasts :: [Int] <- getPodcasts
     episodeLists :: [[FilePath]] <- traverse getNewEpisodes podcasts
