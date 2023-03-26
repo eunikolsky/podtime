@@ -1,5 +1,6 @@
 module TestCommon
   ( complete
+  , noMoreThan
   , shouldFailWithErrorContaining
   ) where
 
@@ -17,3 +18,8 @@ Right parsed `shouldFailWithErrorContaining` _ = expectationFailure $ "Unexpecte
 -- | Parser combinator to make sure the entire input is consumed.
 complete :: Parser a -> Parser a
 complete = (<* A.endOfInput)
+
+-- | Returns the first number if it's <= the second number; otherwise, the second
+-- number. It's a more obvious name for `min`.
+noMoreThan :: Ord a => a -> a -> a
+noMoreThan = min

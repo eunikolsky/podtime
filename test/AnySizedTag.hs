@@ -9,6 +9,7 @@ import Data.Ord
 import Data.Word
 import Domain.ID3Tag
 import Test.QuickCheck
+import TestCommon
 
 -- | An ID3 tag with arbitrary contents of arbitrary size. The max
 -- size is `2^28 - 1` because it's a synchsafe integer.
@@ -82,8 +83,3 @@ instance Arbitrary AnySizedTag where
       }
 
     where id3TagHeaderLength = 10
-
--- | Returns the first number if it's <= the second number; otherwise, the second
--- number. It's a more obvious name for `min`.
-noMoreThan :: Ord a => a -> a -> a
-noMoreThan = min
