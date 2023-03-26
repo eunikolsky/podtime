@@ -5,11 +5,11 @@ module Stat
   , recordStat
   ) where
 
-import Conduit ((.|), decodeUtf8C, linesUnboundedC, runConduitRes, sourceFile)
+import Conduit ((.|), decodeUtf8C, encodeUtf8C, linesUnboundedC, runConduitRes, sourceFile, stdoutC, unlinesC)
 import ConduitExtra (takeLastC)
 import Data.Text (Text)
-import Data.Text qualified as T (intercalate, pack, unlines)
-import Data.Text.IO qualified as T (appendFile, putStr)
+import Data.Text qualified as T (intercalate, pack)
+import Data.Text.IO qualified as T (appendFile)
 import Data.Time (LocalTime, NominalDiffTime, defaultTimeLocale, formatTime, getZonedTime, zonedTimeToLocalTime)
 import Data.Version (Version, showVersion)
 import Data.Word (Word8, Word16)
@@ -65,15 +65,16 @@ recordStat stat = do
 printStats :: Word8 -> IO ()
 printStats n = do
   logFilepath <- getLogFilepath
-  -- FIXME move output into the conduit
-  stats <- runConduitRes $
+  runConduitRes $
     -- line-by-line file reading from:
     -- https://stackoverflow.com/questions/20127318/read-lines-from-a-file-inside-a-zip-archive-using-haskells-zip-conduit
     sourceFile logFilepath
       .| decodeUtf8C
       .| linesUnboundedC
       .| takeLastC n
-  T.putStr $ T.unlines stats
+      .| unlinesC
+      .| encodeUtf8C
+      .| stdoutC
 
 -- | Returns the filepath to the log file in the XDG data directory.
 getLogFilepath :: IO FilePath

@@ -12,21 +12,21 @@ import TestCommon
 spec :: Spec
 spec = parallel $ do
   describe "takeLastC" $ do
-    prop "returns empty list for empty input" $ \n ->
-      runConduitPure (sourceNull .| takeLastC n) `shouldBe` ([] :: [Int])
+    prop "outputs empty list for empty input" $ \n ->
+      runConduitPure (sourceNull .| takeLastC n .| sinkList) `shouldBe` ([] :: [Int])
 
     prop "returns all elements in order from stream with exactly N elements"
       . forAll genSourceList $ \(n, source) ->
-        runConduitPure (sourceList source .| takeLastC n) `shouldBe` source
+        runConduitPure (sourceList source .| takeLastC n .| sinkList) `shouldBe` source
 
     prop "returns all elements from stream with fewer elements"
       . forAll genSourceListAtLeastTwoElements $ \(sourceCount, source) -> do
         let n = sourceCount + 1
-        runConduitPure (sourceList source .| takeLastC n) `shouldBe` source
+        runConduitPure (sourceList source .| takeLastC n .| sinkList) `shouldBe` source
 
     prop "returns N last elements from stream with more elements"
       . forAll genSourceListWithMoreElements $ \(source, n, expected) ->
-        runConduitPure (sourceList source .| takeLastC n) `shouldBe` expected
+        runConduitPure (sourceList source .| takeLastC n .| sinkList) `shouldBe` expected
 
 -- | Generates a non-empty list of arbitrary length and contents.
 genSourceList :: Gen (Word8, [Int])
