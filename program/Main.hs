@@ -29,14 +29,14 @@ getDuration :: FilePath -> IO AudioDuration
 getDuration file = runConduitRes $ sourceFile file .| sinkParser mp3Parser
 
 -- | The main function of the program: calculates the total duration of the new
--- episodes, appends a stat line to the log file, and prints stat lines from the
--- log.
+-- episodes, appends a stat line to the log file, and prints up to 5 last stat
+-- lines from the log.
 recordAndLogStats :: IO ()
 recordAndLogStats = do
   (total, duration) <- measure getTotalDuration
   stat <- mkStat total duration
   recordStat stat
-  printStats
+  printStats 5
 
 -- | Calculates the total duration of new podcast episodes in the gPodder
 -- database. Returns the duration and the number of episodes contributed there.
@@ -45,6 +45,7 @@ getTotalDuration = do
   homeDir <- getHomeDirectory
   let gPodderHome = homeDir </> "gPodder"
       gPodderDownloads = gPodderHome </> "Downloads"
+  -- TODO stream through conduit
   episodes <- withDatabase (gPodderHome </> "Database") $ do
     podcasts :: [Int] <- getPodcasts
     episodeLists :: [[FilePath]] <- traverse getNewEpisodes podcasts

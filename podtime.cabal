@@ -1,6 +1,6 @@
 cabal-version:       3.0
 name:                podtime
-version:             0.3.1
+version:             0.4.0
 synopsis:            A tool that prints the total time of the new podcasts in a gPodder database.
 homepage:            https://github.com/eunikolsky/podtime#readme
 license:             BSD-3-Clause
@@ -17,7 +17,8 @@ common common-options
       base >= 4.7 && < 5
   default-language:    Haskell2010
   default-extensions:
-      BinaryLiterals
+      BangPatterns
+    , BinaryLiterals
     , DerivingStrategies
     , GeneralizedNewtypeDeriving
     , ImportQualifiedPost
@@ -51,6 +52,7 @@ library
   hs-source-dirs:      src
   exposed-modules:
       AttoparsecExtra
+    , ConduitExtra
     , ID3
     , ID3V1
     , Lib
@@ -58,6 +60,7 @@ library
   build-depends:
       attoparsec
     , bytestring
+    , conduit
     , text
     , time
 
@@ -92,6 +95,7 @@ test-suite unit-test
   other-modules:
       MP3Spec
     , ID3Spec, ID3V1Spec
+    , ConduitExtraSpec
     , TestCommon, AnySizedTag, ID3V1ValidTag
     , Domain.FrameSync, Domain.ID3Tag
     , Domain.MP3HeaderTypes, Domain.MPEGHeaderTypes
@@ -101,6 +105,7 @@ test-suite unit-test
       QuickCheck
     , attoparsec
     , bytestring
+    , conduit
     , containers
     , hspec
     , hspec-attoparsec

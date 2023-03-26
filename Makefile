@@ -31,6 +31,11 @@ check-hlint-other:
 testd:
 	@ghcid --command "HSPEC_FORMAT=failed-examples stack ghci --test --main-is $(MAIN_TEST_TARGET) --ghci-options=-fobject-code" --test "main"
 
+# use like this: `m testd-match MATCH=ConduitExtra`
+.PHONY:
+testd-match:
+	@ghcid --command "stack ghci --test --main-is $(MAIN_TEST_TARGET) --ghci-options=-fobject-code" --test ":main --match \"$${MATCH}\""
+
 .PHONY:
 int-testd:
 	@ghcid --command "stack ghci --test --main-is $(INTEGRATION_TEST_TARGET) --ghci-options=-fobject-code" --test ":main --fail-fast --rerun --rerun-all-on-success --failure-report=int-testd.report"
