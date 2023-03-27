@@ -48,6 +48,23 @@ spec =
               modTimes = M.singleton fp modTime
           runTestDurationM (getDuration fp) durations modTimes cachedDurations `shouldBe` duration
 
+    context "when cached duration with another modtime is present" $ do
+      prop "returns calculated duration" $
+        \(PrintableString fp) (PositiveAudioDuration duration) modTime (PositiveAudioDuration oldDuration) oldModTime -> do
+          let durations = M.singleton fp duration
+              cachedDurations = CachedDurationMap $ M.singleton (fp, oldModTime) oldDuration
+              modTimes = M.singleton fp modTime
+          runTestDurationM (getDuration fp) durations modTimes cachedDurations `shouldBe` duration
+
+      prop "caches calculated duration with new modtime" $
+        \(PrintableString fp) (PositiveAudioDuration duration) modTime (PositiveAudioDuration oldDuration) oldModTime -> do
+          let durations = M.singleton fp duration
+              cachedDurations = CachedDurationMap $ M.singleton (fp, oldModTime) oldDuration
+              expectedCachedDurations = CachedDurationMap $
+                M.insert (fp, modTime) duration (getCachedDurationMap cachedDurations)
+              modTimes = M.singleton fp modTime
+          execTestDurationM (getDuration fp) durations modTimes cachedDurations `shouldBe` expectedCachedDurations
+
 -- | Map from a filename to its audio duration. It's used to mock the duration
 -- calculation instead of real parsing (`MonadDuration m`).
 type DurationMap = Map FilePath AudioDuration
