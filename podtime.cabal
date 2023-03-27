@@ -114,6 +114,7 @@ test-suite unit-test
     , mtl
     , podtime
     , quickcheck-instances
+    , time
 
 test-suite integration-test
   import:              common-options
