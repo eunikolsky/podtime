@@ -18,5 +18,7 @@ class Monad m => MonadDurationCache m where
 getDuration :: (MonadDuration m, MonadDurationCache m) => FilePath -> m AudioDuration
 getDuration fp = do
   cached <- getCachedDuration fp
+  -- note: even though the code may not look like it, but duration is calculated
+  -- only if there is no cached duration
   duration <- calculateDuration fp
   pure $ fromMaybe duration cached

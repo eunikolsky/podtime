@@ -18,11 +18,20 @@ spec =
             cachedDurations = CachedDurationMap M.empty
         runTestDurationM (getDuration fp) durations cachedDurations `shouldBe` duration
 
-    prop "returns cached duration" $
-      \(PrintableString fp) (PositiveAudioDuration duration) -> do
-        let durations = M.empty
-            cachedDurations = CachedDurationMap $ M.singleton fp duration
-        runTestDurationM (getDuration fp) durations cachedDurations `shouldBe` duration
+    context "when cached duration is present" $ do
+      prop "returns cached duration" $
+        \(PrintableString fp) (PositiveAudioDuration duration) -> do
+          let durations = M.empty
+              cachedDurations = CachedDurationMap $ M.singleton fp duration
+          runTestDurationM (getDuration fp) durations cachedDurations `shouldBe` duration
+
+      prop "doesn't calculate duration" $
+        \(PrintableString fp) (PositiveAudioDuration duration) -> do
+          -- this injects the `undefined` value, which will throw an error if
+          -- calculation is requested
+          let durations = M.singleton fp undefined
+              cachedDurations = CachedDurationMap $ M.singleton fp duration
+          runTestDurationM (getDuration fp) durations cachedDurations `shouldBe` duration
 
 -- | Map from a filename to its audio duration. It's used to mock the duration
 -- calculation instead of real parsing (`MonadDuration m`).
