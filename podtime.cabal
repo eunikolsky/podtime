@@ -70,7 +70,8 @@ executable podtime
   hs-source-dirs:      program
   main-is:             Main.hs
   other-modules:
-      GPodderDatabase
+      Duration
+    , GPodderDatabase
     , Paths_podtime
     , Stat
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
@@ -78,11 +79,13 @@ executable podtime
       podtime
     , conduit
     , conduit-extra
+    , containers
     , directory
     , filepath
     , mtl
     , raw-strings-qq
     , sqlite-simple
+    , stm
     , text
     , time
     , unliftio

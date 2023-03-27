@@ -2,6 +2,7 @@ module GetDuration
   ( MonadDuration(..)
   , MonadDurationCache(..)
   , MonadModTime(..)
+  , ModTime
   , getDuration
   ) where
 
