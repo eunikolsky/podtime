@@ -3,31 +3,28 @@ module Duration
   ) where
 
 import Conduit ((.|), MonadIO, MonadThrow, MonadUnliftIO, liftIO, runConduitRes, sourceFile)
+import Control.Concurrent.STM.TVar (TVar, newTVarIO, modifyTVar', readTVarIO)
 import Control.Exception (bracket)
-import Control.Monad (forM_)
 import Control.Monad.Reader (MonadReader, ReaderT, ask, runReaderT)
-import Control.Monad.STM (STM, atomically)
+import Control.Monad.STM (atomically)
 import Data.Conduit.Attoparsec (sinkParser)
-import Data.Hashable (Hashable)
+import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as M (empty, fromList, insert, lookup, toList)
 import Data.Text qualified as T (lines, pack, unlines, unpack)
 import Data.Text.IO qualified as T (readFile, writeFile)
-import Data.Time.Clock.Compat ()
 import GetDuration (ModTime, MonadDuration(..), MonadDurationCache(..), MonadModTime(..))
-import ListT qualified (toList)
 import MP3 (AudioDuration, mp3Parser)
-import StmContainers.Map qualified as STM (Map)
-import StmContainers.Map qualified as STMMap (insert, listT, lookup, new)
 import System.Directory (doesFileExist, getModificationTime)
 
 -- TODO use text?
-type DurationCacheMap = STM.Map (FilePath, ModTime) AudioDuration
+type DurationCacheMap = Map (FilePath, ModTime) AudioDuration
 
 -- TODO make it a monad transformer?
 -- FIXME separate file caching from other two tasks of this type?
-newtype CachedDurationM a = CachedDurationM (ReaderT DurationCacheMap IO a)
+newtype CachedDurationM a = CachedDurationM (ReaderT (TVar DurationCacheMap) IO a)
   deriving newtype
     ( Functor, Applicative, Monad
-    , MonadReader DurationCacheMap
+    , MonadReader (TVar DurationCacheMap)
     , MonadIO, MonadUnliftIO, MonadThrow
     )
 
@@ -41,11 +38,12 @@ instance MonadDuration CachedDurationM where
 instance MonadDurationCache CachedDurationM where
   getCachedDuration key = do
     cacheVar <- ask
-    liftIO . atomically $ STMMap.lookup key cacheVar
+    cache <- liftIO $ readTVarIO cacheVar
+    pure $ M.lookup key cache
 
   cacheDuration key duration = do
     cacheVar <- ask
-    liftIO . atomically $ STMMap.insert duration key cacheVar
+    liftIO . atomically . modifyTVar' cacheVar $ M.insert key duration
 
 instance MonadModTime CachedDurationM where
   getModTime = liftIO . getModificationTime
@@ -57,26 +55,21 @@ withCachedDuration (CachedDurationM a) = bracket loadCache saveCache $ runReader
 -- important: the return type has to be `TVar Map`, not just `Map` because this
 -- value is passed to `saveCache` – if `Map` is used, the same, unmodified map
 -- will be saved
-loadCache :: IO DurationCacheMap
+loadCache :: IO (TVar DurationCacheMap)
 loadCache = do
   exists <- doesFileExist cacheFile
-  keyValues <- if exists
-    then fmap (read . T.unpack) . T.lines <$> T.readFile cacheFile
-    else pure mempty
-  atomically . stmMapFromList $ keyValues
+  cache <- if exists
+    -- TODO support streaming?
+    then M.fromList . fmap (read . T.unpack) . T.lines <$> T.readFile cacheFile
+    else pure M.empty
+  newTVarIO cache
 
-stmMapFromList :: Hashable k => [(k, v)] -> STM (STM.Map k v)
-stmMapFromList keyValues = do
-  m <- STMMap.new
-  forM_ keyValues $ \(key, value) -> STMMap.insert value key m
-  pure m
-
-saveCache :: DurationCacheMap -> IO ()
+saveCache :: TVar DurationCacheMap -> IO ()
 saveCache cacheVar = do
-  -- TODO streaming?
-  keyValues <- atomically . ListT.toList $ STMMap.listT cacheVar
+  cache <- readTVarIO cacheVar
+  -- TODO support streaming?
   -- FIXME use a better serialization approach
-  T.writeFile cacheFile . T.unlines . fmap (T.pack . show) $ keyValues
+  T.writeFile cacheFile . T.unlines . fmap (T.pack . show) . M.toList $ cache
 
 -- FIXME use the cache location
 cacheFile :: FilePath

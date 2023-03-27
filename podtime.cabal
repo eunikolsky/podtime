@@ -82,16 +82,12 @@ executable podtime
     , containers
     , directory
     , filepath
-    , hashable
-    , list-t
     , mtl
     , raw-strings-qq
     , sqlite-simple
     , stm
-    , stm-containers
     , text
     , time
-    , time-compat
     , unliftio
     , xdg-basedir
 
