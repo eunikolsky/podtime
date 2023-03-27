@@ -6,7 +6,6 @@ module GetDuration
   , getDuration
   ) where
 
-import Data.Functor
 import Data.Time.Clock
 import MP3
 
@@ -32,12 +31,10 @@ getDuration :: (MonadDuration m, MonadDurationCache m, MonadModTime m) =>
 getDuration fp = do
   modTime <- getModTime fp
   cached <- getCachedDuration (fp, modTime)
-  -- note: even though the code may not look like it, but duration is calculated
-  -- only if there is no cached duration
-  duration <- calculateDuration fp
-  maybe
-    -- if there is no cached value, cache it and return
-    (cacheDuration (fp, modTime) duration $> duration)
-    -- else return it w/o caching again
-    pure
-    cached
+  -- note: this `calculated` value is a description of how to calculate a
+  -- duration, it's executed only when there is no cached value
+  let calculated = do
+        duration <- calculateDuration fp
+        cacheDuration (fp, modTime) duration
+        pure duration
+  maybe calculated pure cached

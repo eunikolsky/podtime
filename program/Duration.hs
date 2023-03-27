@@ -24,7 +24,6 @@ type DurationCacheMap = STM.Map (FilePath, ModTime) AudioDuration
 
 -- TODO make it a monad transformer?
 -- FIXME separate file caching from other two tasks of this type?
--- FIXME this cache doesn't reduce the running time significantly
 newtype CachedDurationM a = CachedDurationM (ReaderT DurationCacheMap IO a)
   deriving newtype
     ( Functor, Applicative, Monad
