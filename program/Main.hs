@@ -1,7 +1,5 @@
 module Main (main) where
 
-import Conduit ((.|), runConduitRes, sourceFile)
-import Data.Conduit.Attoparsec (sinkParser)
 import Data.Time.Clock (NominalDiffTime, diffUTCTime, getCurrentTime)
 import Data.Version (showVersion)
 import System.Directory (getHomeDirectory)
@@ -9,8 +7,10 @@ import System.Environment (getArgs)
 import System.FilePath.Posix ((</>))
 import UnliftIO.Async (pooledMapConcurrently)
 
+import Duration (withCachedDuration)
 import GPodderDatabase (getNewEpisodes, getPodcasts, withDatabase)
-import MP3 (AudioDuration(..), mp3Parser)
+import GetDuration (getDuration)
+import MP3 (AudioDuration(..))
 import Paths_podtime (version)
 import Stat (EpisodeCount, mkStat, printStats, recordStat)
 
@@ -19,14 +19,9 @@ main = do
   args <- getArgs
   case args of
     ["-v"] -> putStrLn . showVersion $ version
-    [file] -> getDuration file >>= print . getAudioDuration
+    -- FIXME this action should not use cache!
+    [file] -> withCachedDuration (getDuration file) >>= print . getAudioDuration
     _ -> recordAndLogStats
-
--- | Returns the audio duration of a single MP3 file. Throws an IO exception
--- if parsing failed.
--- TODO return an error instead
-getDuration :: FilePath -> IO AudioDuration
-getDuration file = runConduitRes $ sourceFile file .| sinkParser mp3Parser
 
 -- | The main function of the program: calculates the total duration of the new
 -- episodes, appends a stat line to the log file, and prints up to 5 last stat
@@ -51,8 +46,10 @@ getTotalDuration = do
     episodeLists :: [[FilePath]] <- traverse getNewEpisodes podcasts
     pure $ concat episodeLists
 
+  --let getDuration' = getDuration @IO
   -- FIXME return the file presense check?
-  durations <- pooledMapConcurrently getDuration $ fmap (gPodderDownloads </>) episodes
+  durations <- withCachedDuration $
+    pooledMapConcurrently getDuration $ fmap (gPodderDownloads </>) episodes
   pure (sum durations, fromIntegral $ length episodes)
 
 -- | Measures the wall time duration of running the action `a`.

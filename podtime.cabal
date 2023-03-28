@@ -19,6 +19,7 @@ common common-options
   default-extensions:
       BangPatterns
     , BinaryLiterals
+    , DeriveGeneric
     , DerivingStrategies
     , GeneralizedNewtypeDeriving
     , ImportQualifiedPost
@@ -70,21 +71,28 @@ executable podtime
   hs-source-dirs:      program
   main-is:             Main.hs
   other-modules:
-      GPodderDatabase
+      CacheItemCSV
+    , Duration
+    , GPodderDatabase
     , Paths_podtime
     , Stat
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       podtime
+    , bytestring
+    , cassava
     , conduit
     , conduit-extra
+    , containers
     , directory
     , filepath
     , mtl
     , raw-strings-qq
     , sqlite-simple
+    , stm
     , text
     , time
+    , unix
     , unliftio
     , xdg-basedir
 
