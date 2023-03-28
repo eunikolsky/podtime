@@ -17,7 +17,7 @@ import Lib (formatDuration)
 import MP3 (AudioDuration)
 import Paths_podtime qualified as Paths (version)
 import System.Directory (createDirectoryIfMissing)
-import System.Environment.XDG.BaseDir (getUserDataDir)
+import System.Environment.XDG.BaseDir (getUserDataDir) -- FIXME use System.Directory instead
 import System.FilePath ((</>))
 
 -- it's an unsigned integer to indicate that it can't be negative
@@ -81,6 +81,7 @@ getLogFilepath :: IO FilePath
 getLogFilepath = do
   dataDir <- getUserDataDir programDir
   let createParents = True
+  -- FIXME create dir with mode 700
   createDirectoryIfMissing createParents dataDir
   pure $ dataDir </> logFilename
 

@@ -1,7 +1,5 @@
 module Main (main) where
 
-import Conduit ((.|), runConduitRes, sourceFile)
-import Data.Conduit.Attoparsec (sinkParser)
 import Data.Time.Clock (NominalDiffTime, diffUTCTime, getCurrentTime)
 import Data.Version (showVersion)
 import System.Directory (getHomeDirectory)
@@ -9,9 +7,13 @@ import System.Environment (getArgs)
 import System.FilePath.Posix ((</>))
 import UnliftIO.Async (pooledMapConcurrently)
 
+import FileDurationCacheM (withFileDurationCache)
 import GPodderDatabase (getNewEpisodes, getPodcasts, withDatabase)
-import MP3 (AudioDuration(..), mp3Parser)
+import GetDuration (getDuration)
+import MP3 (AudioDuration(..))
+import NoDurationCacheM (withoutDurationCache)
 import Paths_podtime (version)
+import PureParserDurationM (runPureParserDuration)
 import Stat (EpisodeCount, mkStat, printStats, recordStat)
 
 main :: IO ()
@@ -19,14 +21,14 @@ main = do
   args <- getArgs
   case args of
     ["-v"] -> putStrLn . showVersion $ version
-    [file] -> getDuration file >>= print . getAudioDuration
+    [file] -> printFileDuration file
     _ -> recordAndLogStats
 
--- | Returns the audio duration of a single MP3 file. Throws an IO exception
--- if parsing failed.
--- TODO return an error instead
-getDuration :: FilePath -> IO AudioDuration
-getDuration file = runConduitRes $ sourceFile file .| sinkParser mp3Parser
+-- | Print the duration of a single file.
+printFileDuration :: FilePath -> IO ()
+printFileDuration file = do
+  duration <- runPureParserDuration . withoutDurationCache $ getDuration file
+  print $ getAudioDuration duration
 
 -- | The main function of the program: calculates the total duration of the new
 -- episodes, appends a stat line to the log file, and prints up to 5 last stat
@@ -52,7 +54,8 @@ getTotalDuration = do
     pure $ concat episodeLists
 
   -- FIXME return the file presense check?
-  durations <- pooledMapConcurrently getDuration $ fmap (gPodderDownloads </>) episodes
+  durations <- runPureParserDuration . withFileDurationCache .
+    pooledMapConcurrently getDuration $ fmap (gPodderDownloads </>) episodes
   pure (sum durations, fromIntegral $ length episodes)
 
 -- | Measures the wall time duration of running the action `a`.

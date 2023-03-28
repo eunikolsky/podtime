@@ -1,6 +1,6 @@
 cabal-version:       3.0
 name:                podtime
-version:             0.4.0
+version:             0.5.0
 synopsis:            A tool that prints the total time of the new podcasts in a gPodder database.
 homepage:            https://github.com/eunikolsky/podtime#readme
 license:             BSD-3-Clause
@@ -19,6 +19,7 @@ common common-options
   default-extensions:
       BangPatterns
     , BinaryLiterals
+    , DeriveGeneric
     , DerivingStrategies
     , GeneralizedNewtypeDeriving
     , ImportQualifiedPost
@@ -53,6 +54,7 @@ library
   exposed-modules:
       AttoparsecExtra
     , ConduitExtra
+    , GetDuration
     , ID3
     , ID3V1
     , Lib
@@ -69,21 +71,31 @@ executable podtime
   hs-source-dirs:      program
   main-is:             Main.hs
   other-modules:
-      GPodderDatabase
+      CacheItemCSV
+    , FileDurationCacheM
+    , GPodderDatabase
+    , NoDurationCacheM
+    , OrphanInstances
     , Paths_podtime
+    , PureParserDurationM
     , Stat
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       podtime
+    , bytestring
+    , cassava
     , conduit
     , conduit-extra
+    , containers
     , directory
     , filepath
     , mtl
     , raw-strings-qq
     , sqlite-simple
+    , stm
     , text
     , time
+    , unix
     , unliftio
     , xdg-basedir
 
@@ -96,6 +108,7 @@ test-suite unit-test
       MP3Spec
     , ID3Spec, ID3V1Spec
     , ConduitExtraSpec
+    , GetDurationSpec
     , TestCommon, AnySizedTag, ID3V1ValidTag
     , Domain.FrameSync, Domain.ID3Tag
     , Domain.MP3HeaderTypes, Domain.MPEGHeaderTypes
@@ -109,8 +122,10 @@ test-suite unit-test
     , containers
     , hspec
     , hspec-attoparsec
+    , mtl
     , podtime
     , quickcheck-instances
+    , time
 
 test-suite integration-test
   import:              common-options
