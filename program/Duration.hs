@@ -4,8 +4,8 @@ module Duration
 
 import CacheItemCSV (CacheItemCSV(..), fromKeyValue, toKeyValue)
 import Conduit ((.|), MonadIO, MonadThrow, MonadUnliftIO, liftIO, runConduitRes, sourceFile)
-import Control.Concurrent.STM.TVar (TVar, newTVarIO, modifyTVar', readTVarIO)
-import Control.Exception (Exception, bracket, throwIO)
+import Control.Concurrent.STM.TVar (TVar, modifyTVar')
+import Control.Exception (Exception)
 import Control.Monad (unless, when)
 import Control.Monad.Reader (MonadReader, ReaderT, ask, runReaderT)
 import Control.Monad.STM (atomically)
@@ -18,10 +18,13 @@ import Data.Map.Strict qualified as M (empty, insert, lookup, toList)
 import Data.Monoid (Any(..))
 import GetDuration (ModTime, MonadDuration(..), MonadDurationCache(..), MonadModTime(..))
 import MP3 (AudioDuration, mp3Parser)
-import System.Directory (XdgDirectory(XdgCache), createDirectory, doesDirectoryExist, doesFileExist, getModificationTime, getXdgDirectory)
+import System.Directory (XdgDirectory(XdgCache), getModificationTime)
 import System.FilePath ((</>))
 import System.Posix.Files (ownerModes, setFileMode)
 import System.Posix.Types (FileMode)
+import UnliftIO.Directory (createDirectory, doesDirectoryExist, doesFileExist, getXdgDirectory)
+import UnliftIO.Exception (bracket, throwIO)
+import UnliftIO.STM (newTVarIO, readTVarIO)
 
 data DurationCache = DurationCache
   -- TODO use text?
@@ -31,24 +34,23 @@ data DurationCache = DurationCache
   -- ^ tracks whether there were any inserts, presumably changing the cache
   }
 
--- TODO make it a monad transformer?
 -- FIXME separate file caching from other two tasks of this type?
 -- TODO try lock-based var instead of STM
-newtype CachedDurationM a = CachedDurationM (ReaderT (TVar DurationCache) IO a)
+newtype CachedDurationM m a = CachedDurationM (ReaderT (TVar DurationCache) m a)
   deriving newtype
     ( Functor, Applicative, Monad
     , MonadReader (TVar DurationCache)
     , MonadIO, MonadUnliftIO, MonadThrow
     )
 
-instance MonadDuration CachedDurationM where
+instance (MonadUnliftIO m, MonadThrow m) => MonadDuration (CachedDurationM m) where
   -- | Returns the audio duration of a single MP3 file. Throws an IO exception
   -- if parsing failed.
   -- TODO return an error instead
   --calculateDuration :: FilePath -> m AudioDuration
   calculateDuration file = runConduitRes $ sourceFile file .| sinkParser mp3Parser
 
-instance MonadDurationCache CachedDurationM where
+instance MonadIO m => MonadDurationCache (CachedDurationM m) where
   getCachedDuration key = do
     cacheVar <- ask
     DurationCache { durationCache } <- liftIO $ readTVarIO cacheVar
@@ -62,11 +64,10 @@ instance MonadDurationCache CachedDurationM where
         , anyInserts = anyInserts <> Any True
         }
 
-instance MonadModTime CachedDurationM where
+instance MonadIO m => MonadModTime (CachedDurationM m) where
   getModTime = liftIO . getModificationTime
 
--- TODO should it return `IO` or a more generic monad?
-withCachedDuration :: CachedDurationM a -> IO a
+withCachedDuration :: MonadUnliftIO m => CachedDurationM m a -> m a
 withCachedDuration (CachedDurationM a) = bracket loadCache saveCache $ runReaderT a
 
 -- | Loads the cache from file. Throws an exception on parsing errors.
@@ -74,14 +75,14 @@ withCachedDuration (CachedDurationM a) = bracket loadCache saveCache $ runReader
 -- Important: the return type has to be `TVar Map`, not just `Map` because this
 -- value is passed to `saveCache` – if `Map` is used, the same, unmodified map
 -- will be saved.
-loadCache :: IO (TVar DurationCache)
+loadCache :: MonadIO m => m (TVar DurationCache)
 loadCache = do
   cacheFile <- getCacheFilepath
   exists <- doesFileExist cacheFile
   durationCache <- if exists
     then do
       -- TODO support streaming?
-      bytes <- BL.readFile cacheFile
+      bytes <- liftIO $ BL.readFile cacheFile
       let eitherCache = loadCacheItems <$> decode @CacheItemCSV NoHeader bytes
       handleError eitherCache
     else pure M.empty
@@ -101,23 +102,23 @@ loadCacheItems = foldl'
 
 -- | Saves the cache to file only if there were any changes (currently, even if
 -- an insert hasn't changed any contents).
-saveCache :: TVar DurationCache -> IO ()
+saveCache :: MonadIO m => TVar DurationCache -> m ()
 saveCache cacheVar = do
   DurationCache { durationCache, anyInserts } <- readTVarIO cacheVar
   when (getAny anyInserts) $ do
     -- TODO support streaming?
     let bytes = encode @CacheItemCSV $ fromKeyValue <$> M.toList durationCache
     cacheFile <- getCacheFilepath
-    BL.writeFile cacheFile bytes
+    liftIO $ BL.writeFile cacheFile bytes
 
 -- | Returns the path to the cache file in the program subdirectory in the XDG
 -- config directory. Creates the subdirectory if missing.
-getCacheFilepath :: IO FilePath
+getCacheFilepath :: MonadIO m => m FilePath
 getCacheFilepath = do
   dir <- getXdgDirectory XdgCache "podtime"
   dirExists <- doesDirectoryExist dir
   unless dirExists $
-    createDirectory dir >> setFileMode dir userRWX
+    createDirectory dir >> liftIO (setFileMode dir userRWX)
   pure $ dir </> "duration.cache"
 
 -- | Mode `700` for the created cache subdirectory, as suggested by the
