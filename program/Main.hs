@@ -7,11 +7,12 @@ import System.Environment (getArgs)
 import System.FilePath.Posix ((</>))
 import UnliftIO.Async (pooledMapConcurrently)
 
-import Duration (runPureParserDuration, withCachedDuration)
+import Duration (withCachedDuration)
 import GPodderDatabase (getNewEpisodes, getPodcasts, withDatabase)
 import GetDuration (getDuration)
 import MP3 (AudioDuration(..))
 import Paths_podtime (version)
+import PureParserDurationM (runPureParserDuration)
 import Stat (EpisodeCount, mkStat, printStats, recordStat)
 
 main :: IO ()

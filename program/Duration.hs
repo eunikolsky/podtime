@@ -1,25 +1,22 @@
 module Duration
-  ( runPureParserDuration
-  , withCachedDuration
+  ( withCachedDuration
   ) where
 
 import CacheItemCSV (CacheItemCSV(..), fromKeyValue, toKeyValue)
-import Conduit ((.|), MonadIO, MonadThrow, MonadTrans, MonadUnliftIO, lift, liftIO, runConduitRes, sourceFile)
+import Conduit (MonadIO, MonadThrow, MonadTrans, MonadUnliftIO, lift, liftIO)
 import Control.Concurrent.STM.TVar (TVar, modifyTVar')
 import Control.Exception (Exception)
 import Control.Monad (unless, when)
-import Control.Monad.Identity (IdentityT(runIdentityT))
 import Control.Monad.Reader (MonadReader, ReaderT, ask, runReaderT)
 import Control.Monad.STM (atomically)
 import Data.ByteString.Lazy qualified as BL (readFile, writeFile)
-import Data.Conduit.Attoparsec (sinkParser)
 import Data.Csv (HasHeader(NoHeader), decode, encode)
 import Data.Foldable (foldl')
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M (empty, insert, lookup, toList)
 import Data.Monoid (Any(..))
 import GetDuration (ModTime, MonadDuration(..), MonadDurationCache(..), MonadModTime(..))
-import MP3 (AudioDuration, mp3Parser)
+import MP3 (AudioDuration)
 import System.Directory (XdgDirectory(XdgCache))
 import System.FilePath ((</>))
 import System.Posix.Files (ownerModes, setFileMode)
@@ -50,26 +47,6 @@ instance (MonadModTime m, MonadIO m) => MonadModTime (CachedDurationM m) where
 
 instance MonadDuration m => MonadDuration (CachedDurationM m) where
   calculateDuration = lift . calculateDuration
-
--- FIXME extract
--- | Implements the `MonadDuration` interface by using the `mp3Parser`.
---
--- Note: the `IdentityT` is only necessary to implement the `MonadTrans` class
--- to allow to `lift` the `getModTime` into this monad.
-newtype PureParserDurationM m a = PureParserDurationM (IdentityT m a)
-  deriving newtype
-    ( Functor, Applicative, Monad
-    , MonadTrans, MonadIO, MonadUnliftIO, MonadThrow
-    )
-
-instance (MonadUnliftIO m, MonadThrow m) => MonadDuration (PureParserDurationM m) where
-  calculateDuration file = runConduitRes $ sourceFile file .| sinkParser mp3Parser
-
-instance MonadModTime m => MonadModTime (PureParserDurationM m) where
-  getModTime = lift . getModTime
-
-runPureParserDuration :: PureParserDurationM m a -> m a
-runPureParserDuration (PureParserDurationM a) = runIdentityT a
 
 instance MonadIO m => MonadDurationCache (CachedDurationM m) where
   getCachedDuration key = do

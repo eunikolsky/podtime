@@ -76,6 +76,7 @@ executable podtime
     , GPodderDatabase
     , OrphanInstances
     , Paths_podtime
+    , PureParserDurationM
     , Stat
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:
