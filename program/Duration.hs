@@ -18,7 +18,7 @@ import Data.Map.Strict qualified as M (empty, insert, lookup, toList)
 import Data.Monoid (Any(..))
 import GetDuration (ModTime, MonadDuration(..), MonadDurationCache(..), MonadModTime(..))
 import MP3 (AudioDuration, mp3Parser)
-import System.Directory (XdgDirectory(XdgCache), getModificationTime)
+import System.Directory (XdgDirectory(XdgCache))
 import System.FilePath ((</>))
 import System.Posix.Files (ownerModes, setFileMode)
 import System.Posix.Types (FileMode)
@@ -34,7 +34,7 @@ data DurationCache = DurationCache
   -- ^ tracks whether there were any inserts, presumably changing the cache
   }
 
--- FIXME separate file caching from other two tasks of this type?
+-- FIXME separate file caching from duration calculation
 -- TODO try lock-based var instead of STM
 newtype CachedDurationM m a = CachedDurationM (ReaderT (TVar DurationCache) m a)
   deriving newtype
@@ -42,6 +42,9 @@ newtype CachedDurationM m a = CachedDurationM (ReaderT (TVar DurationCache) m a)
     , MonadReader (TVar DurationCache)
     , MonadIO, MonadUnliftIO, MonadThrow
     )
+
+instance (MonadModTime m, MonadIO m) => MonadModTime (CachedDurationM m) where
+  getModTime = liftIO . getModTime
 
 instance (MonadUnliftIO m, MonadThrow m) => MonadDuration (CachedDurationM m) where
   -- | Returns the audio duration of a single MP3 file. Throws an IO exception
@@ -63,9 +66,6 @@ instance MonadIO m => MonadDurationCache (CachedDurationM m) where
         { durationCache = M.insert key duration durationCache
         , anyInserts = anyInserts <> Any True
         }
-
-instance MonadIO m => MonadModTime (CachedDurationM m) where
-  getModTime = liftIO . getModificationTime
 
 withCachedDuration :: MonadUnliftIO m => CachedDurationM m a -> m a
 withCachedDuration (CachedDurationM a) = bracket loadCache saveCache $ runReaderT a
