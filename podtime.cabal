@@ -21,6 +21,7 @@ common common-options
     , BinaryLiterals
     , DeriveGeneric
     , DerivingStrategies
+    , DerivingVia
     , GeneralizedNewtypeDeriving
     , ImportQualifiedPost
     , NamedFieldPuns
@@ -74,6 +75,8 @@ executable podtime
       CacheItemCSV
     , FileDurationCacheM
     , GPodderDatabase
+    , LiftMonadDurationT
+    , LiftMonadModTimeT
     , NoDurationCacheM
     , OrphanInstances
     , Paths_podtime

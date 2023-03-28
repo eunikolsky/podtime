@@ -3,7 +3,7 @@ module FileDurationCacheM
   ) where
 
 import CacheItemCSV (CacheItemCSV(..), fromKeyValue, toKeyValue)
-import Conduit (MonadIO, MonadThrow, MonadTrans, MonadUnliftIO, lift, liftIO)
+import Conduit (MonadIO, MonadThrow, MonadTrans, MonadUnliftIO, liftIO)
 import Control.Concurrent.STM.TVar (TVar, modifyTVar')
 import Control.Exception (Exception)
 import Control.Monad (unless, when)
@@ -16,6 +16,8 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M (empty, insert, lookup, toList)
 import Data.Monoid (Any(..))
 import GetDuration (ModTime, MonadDuration(..), MonadDurationCache(..), MonadModTime(..))
+import LiftMonadDurationT (LiftMonadDurationT(..))
+import LiftMonadModTimeT (LiftMonadModTimeT(..))
 import MP3 (AudioDuration)
 import System.Directory (XdgDirectory(XdgCache))
 import System.FilePath ((</>))
@@ -41,6 +43,8 @@ newtype FileDurationCacheM m a = FileDurationCacheM (ReaderT (TVar DurationCache
     , MonadReader (TVar DurationCache)
     , MonadTrans, MonadIO, MonadUnliftIO, MonadThrow
     )
+  deriving MonadDuration via (LiftMonadDurationT (ReaderT (TVar DurationCache)) m)
+  deriving MonadModTime via (LiftMonadModTimeT (ReaderT (TVar DurationCache)) m)
 
 withFileDurationCache :: MonadUnliftIO m => FileDurationCacheM m a -> m a
 withFileDurationCache (FileDurationCacheM a) = bracket loadCache saveCache $ runReaderT a
@@ -58,12 +62,6 @@ instance MonadIO m => MonadDurationCache (FileDurationCacheM m) where
         { durationCache = M.insert key duration durationCache
         , anyInserts = anyInserts <> Any True
         }
-
-instance (MonadModTime m, MonadIO m) => MonadModTime (FileDurationCacheM m) where
-  getModTime = liftIO . getModTime
-
-instance MonadDuration m => MonadDuration (FileDurationCacheM m) where
-  calculateDuration = lift . calculateDuration
 
 -- | Loads the cache from file. Throws an exception on parsing errors.
 --
