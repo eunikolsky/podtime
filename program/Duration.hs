@@ -1,12 +1,14 @@
 module Duration
-  ( withCachedDuration
+  ( runPureParserDuration
+  , withCachedDuration
   ) where
 
 import CacheItemCSV (CacheItemCSV(..), fromKeyValue, toKeyValue)
-import Conduit ((.|), MonadIO, MonadThrow, MonadUnliftIO, liftIO, runConduitRes, sourceFile)
+import Conduit ((.|), MonadIO, MonadThrow, MonadTrans, MonadUnliftIO, lift, liftIO, runConduitRes, sourceFile)
 import Control.Concurrent.STM.TVar (TVar, modifyTVar')
 import Control.Exception (Exception)
 import Control.Monad (unless, when)
+import Control.Monad.Identity (IdentityT(runIdentityT))
 import Control.Monad.Reader (MonadReader, ReaderT, ask, runReaderT)
 import Control.Monad.STM (atomically)
 import Data.ByteString.Lazy qualified as BL (readFile, writeFile)
@@ -34,24 +36,40 @@ data DurationCache = DurationCache
   -- ^ tracks whether there were any inserts, presumably changing the cache
   }
 
--- FIXME separate file caching from duration calculation
--- TODO try lock-based var instead of STM
+-- | Provides file-based duration cache.
 newtype CachedDurationM m a = CachedDurationM (ReaderT (TVar DurationCache) m a)
+-- TODO try lock-based var instead of STM
   deriving newtype
     ( Functor, Applicative, Monad
     , MonadReader (TVar DurationCache)
-    , MonadIO, MonadUnliftIO, MonadThrow
+    , MonadTrans, MonadIO, MonadUnliftIO, MonadThrow
     )
 
 instance (MonadModTime m, MonadIO m) => MonadModTime (CachedDurationM m) where
   getModTime = liftIO . getModTime
 
-instance (MonadUnliftIO m, MonadThrow m) => MonadDuration (CachedDurationM m) where
-  -- | Returns the audio duration of a single MP3 file. Throws an IO exception
-  -- if parsing failed.
-  -- TODO return an error instead
-  --calculateDuration :: FilePath -> m AudioDuration
+instance MonadDuration m => MonadDuration (CachedDurationM m) where
+  calculateDuration = lift . calculateDuration
+
+-- FIXME extract
+-- | Implements the `MonadDuration` interface by using the `mp3Parser`.
+--
+-- Note: the `IdentityT` is only necessary to implement the `MonadTrans` class
+-- to allow to `lift` the `getModTime` into this monad.
+newtype PureParserDurationM m a = PureParserDurationM (IdentityT m a)
+  deriving newtype
+    ( Functor, Applicative, Monad
+    , MonadTrans, MonadIO, MonadUnliftIO, MonadThrow
+    )
+
+instance (MonadUnliftIO m, MonadThrow m) => MonadDuration (PureParserDurationM m) where
   calculateDuration file = runConduitRes $ sourceFile file .| sinkParser mp3Parser
+
+instance MonadModTime m => MonadModTime (PureParserDurationM m) where
+  getModTime = lift . getModTime
+
+runPureParserDuration :: PureParserDurationM m a -> m a
+runPureParserDuration (PureParserDurationM a) = runIdentityT a
 
 instance MonadIO m => MonadDurationCache (CachedDurationM m) where
   getCachedDuration key = do

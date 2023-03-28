@@ -7,7 +7,7 @@ import System.Environment (getArgs)
 import System.FilePath.Posix ((</>))
 import UnliftIO.Async (pooledMapConcurrently)
 
-import Duration (withCachedDuration)
+import Duration (runPureParserDuration, withCachedDuration)
 import GPodderDatabase (getNewEpisodes, getPodcasts, withDatabase)
 import GetDuration (getDuration)
 import MP3 (AudioDuration(..))
@@ -19,9 +19,15 @@ main = do
   args <- getArgs
   case args of
     ["-v"] -> putStrLn . showVersion $ version
-    -- FIXME this action should not use cache!
-    [file] -> withCachedDuration (getDuration file) >>= print . getAudioDuration
+    [file] -> printFileDuration file
     _ -> recordAndLogStats
+
+-- | Print the duration of a single file.
+printFileDuration :: FilePath -> IO ()
+printFileDuration file = do
+  -- FIXME this action should not use cache!
+  duration <- runPureParserDuration . withCachedDuration $ getDuration file
+  print $ getAudioDuration duration
 
 -- | The main function of the program: calculates the total duration of the new
 -- episodes, appends a stat line to the log file, and prints up to 5 last stat
@@ -46,9 +52,8 @@ getTotalDuration = do
     episodeLists :: [[FilePath]] <- traverse getNewEpisodes podcasts
     pure $ concat episodeLists
 
-  --let getDuration' = getDuration @IO
   -- FIXME return the file presense check?
-  durations <- withCachedDuration $
+  durations <- runPureParserDuration . withCachedDuration .
     pooledMapConcurrently getDuration $ fmap (gPodderDownloads </>) episodes
   pure (sum durations, fromIntegral $ length episodes)
 

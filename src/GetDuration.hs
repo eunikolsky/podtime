@@ -9,8 +9,10 @@ module GetDuration
 import Data.Time.Clock
 import MP3
 
--- | Provides a function to calculate duration of an MP3 file.
+-- | Provides a function to calculate duration of an MP3 file. Throws an
+-- exception if parsing failed.
 class Monad m => MonadDuration m where
+  -- TODO return an error instead
   calculateDuration :: FilePath -> m AudioDuration
 
 -- | A file modification time.
