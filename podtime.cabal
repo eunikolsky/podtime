@@ -72,9 +72,12 @@ executable podtime
   main-is:             Main.hs
   other-modules:
       CacheItemCSV
-    , Duration
+    , FileDurationCacheM
     , GPodderDatabase
+    , NoDurationCacheM
+    , OrphanInstances
     , Paths_podtime
+    , PureParserDurationM
     , Stat
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:

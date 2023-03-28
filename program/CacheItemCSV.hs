@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wno-orphans #-}
-
 module CacheItemCSV
   ( CacheItemCSV(..)
   , fromKeyValue
@@ -12,6 +10,7 @@ import Data.Text.Encoding qualified as TE (decodeUtf8, encodeUtf8)
 import GHC.Generics (Generic)
 import GetDuration (ModTime)
 import MP3 (AudioDuration(..))
+import OrphanInstances ()
 
 -- | Cache items persisted to CSV file.
 data CacheItemCSV = CacheItemCSV !FilePath !ModTimeCSV !AudioDuration
@@ -36,11 +35,3 @@ instance FromField ModTimeCSV where
 
 instance ToField ModTimeCSV where
   toField = TE.encodeUtf8 . T.pack . show
-
--- | Orphan instance to load `AudioDuration` from CSV as its `Double` value.
-instance FromField AudioDuration where
-  parseField = pure . AudioDuration . read . T.unpack . TE.decodeUtf8
-
--- | Orphan instance to save `AudioDuration` to CSV as its `Double` value.
-instance ToField AudioDuration where
-  toField = TE.encodeUtf8 . T.pack . show . getAudioDuration
