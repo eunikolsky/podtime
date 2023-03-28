@@ -6,7 +6,7 @@ import CacheItemCSV (CacheItemCSV(..), fromKeyValue, toKeyValue)
 import Conduit ((.|), MonadIO, MonadThrow, MonadUnliftIO, liftIO, runConduitRes, sourceFile)
 import Control.Concurrent.STM.TVar (TVar, newTVarIO, modifyTVar', readTVarIO)
 import Control.Exception (Exception, bracket, throwIO)
-import Control.Monad (when)
+import Control.Monad (unless, when)
 import Control.Monad.Reader (MonadReader, ReaderT, ask, runReaderT)
 import Control.Monad.STM (atomically)
 import Data.ByteString.Lazy qualified as BL (readFile, writeFile)
@@ -18,7 +18,10 @@ import Data.Map.Strict qualified as M (empty, insert, lookup, toList)
 import Data.Monoid (Any(..))
 import GetDuration (ModTime, MonadDuration(..), MonadDurationCache(..), MonadModTime(..))
 import MP3 (AudioDuration, mp3Parser)
-import System.Directory (doesFileExist, getModificationTime)
+import System.Directory (XdgDirectory(XdgCache), createDirectory, doesDirectoryExist, doesFileExist, getModificationTime, getXdgDirectory)
+import System.FilePath ((</>))
+import System.Posix.Files (ownerModes, setFileMode)
+import System.Posix.Types (FileMode)
 
 data DurationCache = DurationCache
   -- TODO use text?
@@ -73,6 +76,7 @@ withCachedDuration (CachedDurationM a) = bracket loadCache saveCache $ runReader
 -- will be saved.
 loadCache :: IO (TVar DurationCache)
 loadCache = do
+  cacheFile <- getCacheFilepath
   exists <- doesFileExist cacheFile
   durationCache <- if exists
     then do
@@ -103,8 +107,21 @@ saveCache cacheVar = do
   when (getAny anyInserts) $ do
     -- TODO support streaming?
     let bytes = encode @CacheItemCSV $ fromKeyValue <$> M.toList durationCache
+    cacheFile <- getCacheFilepath
     BL.writeFile cacheFile bytes
 
--- FIXME use the cache location
-cacheFile :: FilePath
-cacheFile = "duration.cache"
+-- | Returns the path to the cache file in the program subdirectory in the XDG
+-- config directory. Creates the subdirectory if missing.
+getCacheFilepath :: IO FilePath
+getCacheFilepath = do
+  dir <- getXdgDirectory XdgCache "podtime"
+  dirExists <- doesDirectoryExist dir
+  unless dirExists $
+    createDirectory dir >> setFileMode dir userRWX
+  pure $ dir </> "duration.cache"
+
+-- | Mode `700` for the created cache subdirectory, as suggested by the
+-- XDG Base Directory Specification.
+-- https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
+userRWX :: FileMode
+userRWX = ownerModes

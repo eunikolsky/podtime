@@ -92,6 +92,7 @@ executable podtime
     , stm
     , text
     , time
+    , unix
     , unliftio
     , xdg-basedir
 
