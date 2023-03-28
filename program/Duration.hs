@@ -2,18 +2,20 @@ module Duration
   ( withCachedDuration
   ) where
 
+import CacheItemCSV (CacheItemCSV(..), fromKeyValue, toKeyValue)
 import Conduit ((.|), MonadIO, MonadThrow, MonadUnliftIO, liftIO, runConduitRes, sourceFile)
 import Control.Concurrent.STM.TVar (TVar, newTVarIO, modifyTVar', readTVarIO)
-import Control.Exception (bracket)
+import Control.Exception (Exception, bracket, throwIO)
 import Control.Monad (when)
 import Control.Monad.Reader (MonadReader, ReaderT, ask, runReaderT)
 import Control.Monad.STM (atomically)
+import Data.ByteString.Lazy qualified as BL (readFile, writeFile)
 import Data.Conduit.Attoparsec (sinkParser)
+import Data.Csv (HasHeader(NoHeader), decode, encode)
+import Data.Foldable (foldl')
 import Data.Map.Strict (Map)
-import Data.Map.Strict qualified as M (empty, fromList, insert, lookup, toList)
+import Data.Map.Strict qualified as M (empty, insert, lookup, toList)
 import Data.Monoid (Any(..))
-import Data.Text qualified as T (lines, pack, unlines, unpack)
-import Data.Text.IO qualified as T (readFile, writeFile)
 import GetDuration (ModTime, MonadDuration(..), MonadDurationCache(..), MonadModTime(..))
 import MP3 (AudioDuration, mp3Parser)
 import System.Directory (doesFileExist, getModificationTime)
@@ -64,27 +66,44 @@ instance MonadModTime CachedDurationM where
 withCachedDuration :: CachedDurationM a -> IO a
 withCachedDuration (CachedDurationM a) = bracket loadCache saveCache $ runReaderT a
 
--- important: the return type has to be `TVar Map`, not just `Map` because this
+-- | Loads the cache from file. Throws an exception on parsing errors.
+--
+-- Important: the return type has to be `TVar Map`, not just `Map` because this
 -- value is passed to `saveCache` – if `Map` is used, the same, unmodified map
--- will be saved
+-- will be saved.
 loadCache :: IO (TVar DurationCache)
 loadCache = do
   exists <- doesFileExist cacheFile
   durationCache <- if exists
-    -- TODO support streaming?
-    then M.fromList . fmap (read . T.unpack) . T.lines <$> T.readFile cacheFile
+    then do
+      -- TODO support streaming?
+      bytes <- BL.readFile cacheFile
+      let eitherCache = loadCacheItems <$> decode @CacheItemCSV NoHeader bytes
+      handleError eitherCache
     else pure M.empty
   newTVarIO $ DurationCache { durationCache, anyInserts = mempty }
+
+  where handleError = either (throwIO . LoadCacheException) pure
+
+newtype LoadCacheException = LoadCacheException String
+  deriving stock Show
+
+instance Exception LoadCacheException
+
+loadCacheItems :: Foldable f => f CacheItemCSV -> Map (FilePath, ModTime) AudioDuration
+loadCacheItems = foldl'
+  (\m item -> let ((fp, mtime), dur) = toKeyValue item in M.insert (fp, mtime) dur m)
+  M.empty
 
 -- | Saves the cache to file only if there were any changes (currently, even if
 -- an insert hasn't changed any contents).
 saveCache :: TVar DurationCache -> IO ()
 saveCache cacheVar = do
   DurationCache { durationCache, anyInserts } <- readTVarIO cacheVar
-  when (getAny anyInserts) .
+  when (getAny anyInserts) $ do
     -- TODO support streaming?
-    -- FIXME use a better serialization approach
-    T.writeFile cacheFile . T.unlines . fmap (T.pack . show) . M.toList $ durationCache
+    let bytes = encode @CacheItemCSV $ fromKeyValue <$> M.toList durationCache
+    BL.writeFile cacheFile bytes
 
 -- FIXME use the cache location
 cacheFile :: FilePath

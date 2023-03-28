@@ -20,11 +20,10 @@ import Text.Printf
 
 -- | Duration of an MP3 file, in seconds.
 newtype AudioDuration = AudioDuration { getAudioDuration :: Double }
-  deriving newtype (Eq, Ord, Fractional, Num, Show, Read)
+  deriving newtype (Eq, Ord, Fractional, Num)
 
--- FIXME uncomment the instance
---instance Show AudioDuration where
-  --show (AudioDuration d) = show d <> " s"
+instance Show AudioDuration where
+  show (AudioDuration d) = show d <> " s"
 
 -- | Parses an MP3 (MPEG1/MPEG2 Layer III) file and returns the audio duration.
 -- An accepted MP3 file:
