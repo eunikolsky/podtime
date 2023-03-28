@@ -11,6 +11,7 @@ import FileDurationCacheM (withFileDurationCache)
 import GPodderDatabase (getNewEpisodes, getPodcasts, withDatabase)
 import GetDuration (getDuration)
 import MP3 (AudioDuration(..))
+import NoDurationCacheM (withoutDurationCache)
 import Paths_podtime (version)
 import PureParserDurationM (runPureParserDuration)
 import Stat (EpisodeCount, mkStat, printStats, recordStat)
@@ -26,8 +27,7 @@ main = do
 -- | Print the duration of a single file.
 printFileDuration :: FilePath -> IO ()
 printFileDuration file = do
-  -- FIXME this action should not use cache!
-  duration <- runPureParserDuration . withFileDurationCache $ getDuration file
+  duration <- runPureParserDuration . withoutDurationCache $ getDuration file
   print $ getAudioDuration duration
 
 -- | The main function of the program: calculates the total duration of the new

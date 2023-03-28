@@ -74,6 +74,7 @@ executable podtime
       CacheItemCSV
     , FileDurationCacheM
     , GPodderDatabase
+    , NoDurationCacheM
     , OrphanInstances
     , Paths_podtime
     , PureParserDurationM
