@@ -1,5 +1,5 @@
-module Duration
-  ( withCachedDuration
+module FileDurationCacheM
+  ( withFileDurationCache
   ) where
 
 import CacheItemCSV (CacheItemCSV(..), fromKeyValue, toKeyValue)
@@ -34,7 +34,7 @@ data DurationCache = DurationCache
   }
 
 -- | Provides file-based duration cache.
-newtype CachedDurationM m a = CachedDurationM (ReaderT (TVar DurationCache) m a)
+newtype FileDurationCacheM m a = FileDurationCacheM (ReaderT (TVar DurationCache) m a)
 -- TODO try lock-based var instead of STM
   deriving newtype
     ( Functor, Applicative, Monad
@@ -42,13 +42,10 @@ newtype CachedDurationM m a = CachedDurationM (ReaderT (TVar DurationCache) m a)
     , MonadTrans, MonadIO, MonadUnliftIO, MonadThrow
     )
 
-instance (MonadModTime m, MonadIO m) => MonadModTime (CachedDurationM m) where
-  getModTime = liftIO . getModTime
+withFileDurationCache :: MonadUnliftIO m => FileDurationCacheM m a -> m a
+withFileDurationCache (FileDurationCacheM a) = bracket loadCache saveCache $ runReaderT a
 
-instance MonadDuration m => MonadDuration (CachedDurationM m) where
-  calculateDuration = lift . calculateDuration
-
-instance MonadIO m => MonadDurationCache (CachedDurationM m) where
+instance MonadIO m => MonadDurationCache (FileDurationCacheM m) where
   getCachedDuration key = do
     cacheVar <- ask
     DurationCache { durationCache } <- liftIO $ readTVarIO cacheVar
@@ -62,8 +59,11 @@ instance MonadIO m => MonadDurationCache (CachedDurationM m) where
         , anyInserts = anyInserts <> Any True
         }
 
-withCachedDuration :: MonadUnliftIO m => CachedDurationM m a -> m a
-withCachedDuration (CachedDurationM a) = bracket loadCache saveCache $ runReaderT a
+instance (MonadModTime m, MonadIO m) => MonadModTime (FileDurationCacheM m) where
+  getModTime = liftIO . getModTime
+
+instance MonadDuration m => MonadDuration (FileDurationCacheM m) where
+  calculateDuration = lift . calculateDuration
 
 -- | Loads the cache from file. Throws an exception on parsing errors.
 --

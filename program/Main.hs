@@ -7,7 +7,7 @@ import System.Environment (getArgs)
 import System.FilePath.Posix ((</>))
 import UnliftIO.Async (pooledMapConcurrently)
 
-import Duration (withCachedDuration)
+import FileDurationCacheM (withFileDurationCache)
 import GPodderDatabase (getNewEpisodes, getPodcasts, withDatabase)
 import GetDuration (getDuration)
 import MP3 (AudioDuration(..))
@@ -27,7 +27,7 @@ main = do
 printFileDuration :: FilePath -> IO ()
 printFileDuration file = do
   -- FIXME this action should not use cache!
-  duration <- runPureParserDuration . withCachedDuration $ getDuration file
+  duration <- runPureParserDuration . withFileDurationCache $ getDuration file
   print $ getAudioDuration duration
 
 -- | The main function of the program: calculates the total duration of the new
@@ -54,7 +54,7 @@ getTotalDuration = do
     pure $ concat episodeLists
 
   -- FIXME return the file presense check?
-  durations <- runPureParserDuration . withCachedDuration .
+  durations <- runPureParserDuration . withFileDurationCache .
     pooledMapConcurrently getDuration $ fmap (gPodderDownloads </>) episodes
   pure (sum durations, fromIntegral $ length episodes)
 
