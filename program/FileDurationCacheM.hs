@@ -21,7 +21,6 @@ import UnliftIO.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import XDGDir (XDGDir(XDGCache), getXDGPath)
 
 data DurationCache = DurationCache
-  -- TODO use text?
   { durationCache :: !(Map (FilePath, ModTime) AudioDuration)
   -- ^ the cache itself
   , anyInserts :: !Any
