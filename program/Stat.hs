@@ -16,9 +16,7 @@ import Data.Word (Word8, Word16)
 import Lib (formatDuration)
 import MP3 (AudioDuration)
 import Paths_podtime qualified as Paths (version)
-import System.Directory (createDirectoryIfMissing)
-import System.Environment.XDG.BaseDir (getUserDataDir) -- FIXME use System.Directory instead
-import System.FilePath ((</>))
+import XDGDir (XDGDir(XDGData), getXDGPath)
 
 -- it's an unsigned integer to indicate that it can't be negative
 type EpisodeCount = Word16
@@ -78,13 +76,4 @@ printStats n = do
 
 -- | Returns the filepath to the log file in the XDG data directory.
 getLogFilepath :: IO FilePath
-getLogFilepath = do
-  dataDir <- getUserDataDir programDir
-  let createParents = True
-  -- FIXME create dir with mode 700
-  createDirectoryIfMissing createParents dataDir
-  pure $ dataDir </> logFilename
-
-  where
-    programDir = "podtime"
-    logFilename = "stats"
+getLogFilepath = getXDGPath XDGData "stats"
