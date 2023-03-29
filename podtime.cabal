@@ -93,7 +93,6 @@ executable podtime
     , mtl
     , raw-strings-qq
     , sqlite-simple
-    , stm
     , text
     , time
     , unix

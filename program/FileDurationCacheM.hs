@@ -4,11 +4,9 @@ module FileDurationCacheM
 
 import CacheItemCSV (CacheItemCSV(..), fromKeyValue, toKeyValue)
 import Conduit (MonadIO, MonadThrow, MonadTrans, MonadUnliftIO, lift, liftIO)
-import Control.Concurrent.STM.TVar (TVar, modifyTVar')
 import Control.Exception (Exception)
 import Control.Monad (when)
 import Control.Monad.Reader (MonadReader, ReaderT, ask, runReaderT)
-import Control.Monad.STM (atomically)
 import Data.ByteString.Lazy qualified as BL (readFile, writeFile)
 import Data.Csv (HasHeader(NoHeader), decode, encode)
 import Data.Foldable (foldl')
@@ -19,7 +17,7 @@ import GetDuration (ModTime, MonadDuration(..), MonadDurationCache(..), MonadMod
 import MP3 (AudioDuration)
 import UnliftIO.Directory (doesFileExist)
 import UnliftIO.Exception (bracket, throwIO)
-import UnliftIO.STM (newTVarIO, readTVarIO)
+import UnliftIO.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import XDGDir (XDGDir(XDGCache), getXDGPath)
 
 data DurationCache = DurationCache
@@ -31,11 +29,10 @@ data DurationCache = DurationCache
   }
 
 -- | Provides file-based duration cache.
-newtype FileDurationCacheM m a = FileDurationCacheM (ReaderT (TVar DurationCache) m a)
--- TODO try lock-based var instead of STM
+newtype FileDurationCacheM m a = FileDurationCacheM (ReaderT (IORef DurationCache) m a)
   deriving newtype
     ( Functor, Applicative, Monad
-    , MonadReader (TVar DurationCache)
+    , MonadReader (IORef DurationCache)
     , MonadTrans, MonadIO, MonadUnliftIO, MonadThrow
     )
 
@@ -45,16 +42,18 @@ withFileDurationCache (FileDurationCacheM a) = bracket loadCache saveCache $ run
 instance MonadIO m => MonadDurationCache (FileDurationCacheM m) where
   getCachedDuration key = do
     cacheVar <- ask
-    DurationCache { durationCache } <- liftIO $ readTVarIO cacheVar
+    DurationCache { durationCache } <- liftIO $ readIORef cacheVar
     pure $ M.lookup key durationCache
 
   cacheDuration key duration = do
     cacheVar <- ask
-    liftIO . atomically . modifyTVar' cacheVar $ \DurationCache { durationCache, anyInserts } ->
-      DurationCache
-        { durationCache = M.insert key duration durationCache
-        , anyInserts = anyInserts <> Any True
-        }
+    liftIO . atomicModifyIORef' cacheVar $ \DurationCache { durationCache, anyInserts } ->
+      ( DurationCache
+          { durationCache = M.insert key duration durationCache
+          , anyInserts = anyInserts <> Any True
+          }
+        , ()
+      )
 
 instance (MonadModTime m, MonadIO m) => MonadModTime (FileDurationCacheM m) where
   getModTime = liftIO . getModTime
@@ -64,10 +63,10 @@ instance MonadDuration m => MonadDuration (FileDurationCacheM m) where
 
 -- | Loads the cache from file. Throws an exception on parsing errors.
 --
--- Important: the return type has to be `TVar Map`, not just `Map` because this
+-- Important: the return type has to be `IORef Map`, not just `Map` because this
 -- value is passed to `saveCache` – if `Map` is used, the same, unmodified map
 -- will be saved.
-loadCache :: MonadIO m => m (TVar DurationCache)
+loadCache :: MonadIO m => m (IORef DurationCache)
 loadCache = do
   cacheFile <- getCacheFilepath
   exists <- doesFileExist cacheFile
@@ -78,7 +77,7 @@ loadCache = do
       let eitherCache = loadCacheItems <$> decode @CacheItemCSV NoHeader bytes
       handleError eitherCache
     else pure M.empty
-  newTVarIO $ DurationCache { durationCache, anyInserts = mempty }
+  newIORef $ DurationCache { durationCache, anyInserts = mempty }
 
   where handleError = either (throwIO . LoadCacheException) pure
 
@@ -94,9 +93,9 @@ loadCacheItems = foldl'
 
 -- | Saves the cache to file only if there were any changes (currently, even if
 -- an insert hasn't changed any contents).
-saveCache :: MonadIO m => TVar DurationCache -> m ()
+saveCache :: MonadIO m => IORef DurationCache -> m ()
 saveCache cacheVar = do
-  DurationCache { durationCache, anyInserts } <- readTVarIO cacheVar
+  DurationCache { durationCache, anyInserts } <- readIORef cacheVar
   when (getAny anyInserts) $ do
     -- TODO support streaming?
     let bytes = encode @CacheItemCSV $ fromKeyValue <$> M.toList durationCache
