@@ -53,7 +53,7 @@ getTotalDuration = do
     episodeLists :: [[FilePath]] <- traverse getNewEpisodes podcasts
     pure $ concat episodeLists
 
-  -- FIXME return the file presense check?
+  -- TODO return the file presense check?
   durations <- runPureParserDuration . withFileDurationCache .
     pooledMapConcurrently getDuration $ fmap (gPodderDownloads </>) episodes
   pure (sum durations, fromIntegral $ length episodes)
