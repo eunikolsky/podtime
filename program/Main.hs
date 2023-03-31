@@ -2,11 +2,12 @@ module Main (main) where
 
 import Data.Time.Clock (NominalDiffTime, diffUTCTime, getCurrentTime)
 import Data.Version (showVersion)
+import Options.Applicative ((<**>), execParser, fullDesc, helper, info, progDesc)
 import System.Directory (getHomeDirectory)
-import System.Environment (getArgs)
 import System.FilePath.Posix ((</>))
 import UnliftIO.Async (pooledMapConcurrently)
 
+import Action (Action(..), actionParser)
 import FileDurationCacheM (withFileDurationCache)
 import GPodderDatabase (getNewEpisodes, getPodcasts, withDatabase)
 import GetDuration (getDuration)
@@ -18,11 +19,18 @@ import Stat (EpisodeCount, mkStat, printStats, recordStat)
 
 main :: IO ()
 main = do
-  args <- getArgs
-  case args of
-    ["-v"] -> putStrLn . showVersion $ version
-    [file] -> printFileDuration file
-    _ -> recordAndLogStats
+  action <- execParser $ info
+    (actionParser <**> helper)
+    ( fullDesc
+    <> progDesc "Prints the total duration of new podcast episodes in gPodder"
+    )
+  run action
+
+-- | The main function of the program, runs the action requested by the user.
+run :: Action -> IO ()
+run PrintAllDurations = recordAndLogStats
+run (PrintFileDuration file) = printFileDuration file
+run PrintVersion = putStrLn . showVersion $ version
 
 -- | Print the duration of a single file.
 printFileDuration :: FilePath -> IO ()
@@ -30,9 +38,8 @@ printFileDuration file = do
   duration <- runPureParserDuration . withoutDurationCache $ getDuration file
   print $ getAudioDuration duration
 
--- | The main function of the program: calculates the total duration of the new
--- episodes, appends a stat line to the log file, and prints up to 5 last stat
--- lines from the log.
+-- | Calculates the total duration of the new episodes, appends a stat line to
+-- the log file, and prints up to 5 last stat lines from the log.
 recordAndLogStats :: IO ()
 recordAndLogStats = do
   (total, duration) <- measure getTotalDuration

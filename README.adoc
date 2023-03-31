@@ -1,10 +1,10 @@
 = `podtime`
 
-== Vision
+== What problem does it solve?
 
-This is a tiny tool that prints the amount of time left in all the new podcast episodes in my local https://gpodder.github.io/[gPodder] database. The idea is adapted from a discussion about Overcast in https://atp.fm/388[the ATP episode 388] (around 02:15:20).
+`podtime` is a tool that prints the total duration of all new podcast episodes (MP3 files only) in my local https://gpodder.github.io/[gPodder] database. The idea is inspired by a discussion about Overcast in https://atp.fm/388[the ATP episode 388] (around `02:15:20`).
 
-I remove most of the heard episodes in gPodder and keep only a small percentage of them. Since the whole purpose of the program is to show me how much behind current episodes I am, new episodes are considered all the ones which are newer than the oldest episode that I haven't listened to yet for the given podcast (including that one) even if they are not marked as new in gPodder:
+I remove most of the listened to episodes in gPodder and keep only a small percentage of them. Since the whole purpose of the program is to show me how much behind current episodes I am, new episodes are considered all the ones which are newer than the oldest episode that I haven't listened to yet for the given podcast (including that one) even if they are not marked as new in gPodder:
 
 ----
 Podcast's episodes sorted by descending published date (newer to older):
@@ -19,43 +19,140 @@ Episode #1  // downloaded, not new
 Episode #0  // deleted
 ----
 
-Here episodes #3–7 are used because #3 is the oldest downloaded and not yet listened to episode.
+Here episodes #3–7 are used because #3 is the oldest downloaded and not yet listened to episode. Episodes #5 and #6 aren't marked new so that they aren't synced to my player yet.
 
-In the script, there is no way to distinguish the episodes that I've listened to and saved from the episodes that I haven't heard yet.
+In the database, there is no way to distinguish the episodes that I've listened to and saved from the episodes that I haven't heard yet. (Clarification: apparently, https://gpodder.github.io/docs/user-manual.html#keeping-downloaded-episodes-archiving[archiving episodes] allows this, but I haven't used that option.)
 
-=== Technical details
+== Running the program
 
-The tool is implemented in https://www.haskell.org/[Haskell]. There should be at least some unit tests as applicable.
+Currently, no binary releases are provided, so you need to install https://docs.haskellstack.org/en/stable/GUIDE/[Haskell Stack] (for example, with https://www.haskell.org/ghcup/[GHCup]) and build the project with `stack build`. Then `stack install` can install the executable into `~/.local/bin/`; if the directory is in your `$PATH`, you can simply run `podtime`.
 
-A quick and dirty proof-of-concept is implemented in shell.
-
-==== `gPodder`
-
-gPodder's default directory is `~/gPodder/` where `Database` is a https://sqlite.org/index.html[SQLite] database with the information about all the added podcasts and episodes.
-
-For a podcast, the tool finds the earliest new episode (in the database, `episode.state = 1` (that is https://github.com/gpodder/gpodder/blob/3.10.16/src/gpodder/__init__.py#L155[`DOWNLOADED`]) and `episode.is_new`) and all the newer episodes (by `episode.published`) and extracts their filenames on disk (`episode.download_filename`). The base directory for the podcast is stored in `podcast.download_folder`. This is repeated for every podcast.
-
-To change the gPodder's default directory, you can set the `GPODDER_HOME` environment variable. The tool should support this variable too.
-
-==== MP3 duration
-
-The vast majority of podcasts is distributed as MP3 files, so the tool supports only this format.
-
-The https://unix.stackexchange.com/questions/480375/how-to-find-accumulated-duration-on-several-mp3-with-command-line[basic command] to get the duration is:
+The program finds all new episodes in the gPodder database (expected in `~/gPodder/Database`), calculates their total duration and prints it with some extra information:
 
 ----
-$ ffprobe -hide_banner -v warning -select_streams a:0 -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 $FILE
-[mp3 @ 0x7fb1d8003000] Estimating duration from bitrate, this may be inaccurate
-2379.274833
+$ podtime
+2023-03-28 07:29:25 | 15d 15:49:33 | 180 | 0.5.0 | 0.299108
+2023-03-28 07:35:44 | 15d 15:49:33 | 180 | 0.5.1 | 0.287003
+2023-03-29 07:21:42 | 22d 08:16:32 | 304 | 0.5.1 | 21.941407
+2023-03-30 07:25:40 | 22d 10:01:45 | 305 | 0.5.1 | 0.283438
+2023-03-30 07:33:51 | 22d 10:01:45 | 305 | 0.5.1 | 0.279785
+
+#      (1)          |      (2)     | (3) |  (4)  |    (5)
 ----
 
-Some files are VBR and don't contain the proper information header, so to get the accurate MP3 duration it's necessary to count every MP3 frame in the file. The warning in the command above indicates this. It's possible to use `ffmpeg` to reencode the file into `null` and get the correct duration, but there is https://stackoverflow.com/questions/8933053/check-duration-of-audio-files-on-the-command-line/46493743#46493743[an easier way]:
+The newest line is at the bottom, and there are also up to 4 previous lines. Each line contains:
+
+1. the time when the total duration is calculated,
+2. the total duration,
+3. the number of files that contributed into the duration,
+4. the program version, and
+5. the (wall) time it took to generate the result.
+
+`podtime` stores the log file with the history of its results in `"${XDG_DATA_HOME}"/podtime/stats` (by default `~/.local/share/podtime/stats`). Parsing is quite fast, but still it doesn't make sense to parse the same files on each run since downloaded podcast episodes change very rarely (or never). Therefore, the program caches the calculated duration of each file in `"${XDG_CACHE_HOME}"/podtime/duration.cache` (by default `~/.cache/podtime/duration.cache`) in CSV format.
+
+Display program help with options:
 
 ----
-$ sox --info -D $FILE
-2382.841995
+$ podtime -h
+Usage: podtime [(-v|--version) | FILE]
+
+  Prints the total duration of new podcast episodes in gPodder
+
+Available options:
+  -v,--version             Show program version
+  FILE                     Print the duration of a single FILE (w/o using cache)
+  -h,--help                Show this help text
 ----
 
-TIP: You can pass multiple filenames to the `sox` command above and it will print the durations of all of them, which should be faster and use less resources than to create a process for each file.
+== Technical details
 
-What's left is to sum up all the durations and present the result in a readable time duration format (`HH:MM:SS`).
+`podtime` is implemented in https://www.haskell.org/[Haskell]. https://hackage.haskell.org/package/attoparsec[`attoparsec`] (to parse the binary data) is impressively fast and is integrated with https://hackage.haskell.org/package/conduit[`conduit`] for file streaming, although doesn't produce good error messages and does automatic backtracking on errors, which hides errors from inner parsers.
+
+The parser does the minimally necessary work in order to count the frames, for example the ID3 tag header is parsed to understand how long the tag is and it is then skipped. The parser skips an optional stray byte between frames, found in some podcasts; it also skips some amount of leading and trailing junk, usually found in dumped internet streams.
+
+=== `gPodder`
+
+gPodder's default directory is `~/gPodder/`, where `Database` is a https://sqlite.org/index.html[SQLite] database with the information about all the added podcasts and episodes.
+
+For a podcast, the tool finds the earliest new episode (in the database, `episode.state = 1` (that is link:++https://github.com/gpodder/gpodder/blob/3.10.16/src/gpodder/__init__.py#L155++[`DOWNLOADED`]) and `episode.is_new`) and all the newer episodes (by `episode.published`) and extracts their filenames on disk (`episode.download_filename`). The base directory for the podcast is stored in `podcast.download_folder`. This is repeated for every podcast.
+
+Note that gPodder supports https://gpodder.github.io/docs/user-manual.html#changing-the-downloads-folder-location-and-the-gpodder-home-folder[`GPODDER_HOME` and `GPODDER_DOWNLOAD_DIR`] environment variables, but `podtime` hardcodes the `~/gPodder/` and `~/gPodder/Downloads/` values respectively.
+
+=== MP3 duration
+
+The vast majority of podcasts is distributed as MP3 files, so the tool supports only this format. It's easy to parse an MP3 file to get the number of frames, which is the way to calculate audio duration. The format is described on these webpages:
+
+* MP3 File Structure Description http://www.multiweb.cz/twoinches/MP3inside.htm
+* MPEG Audio Frame Header - CodeProject https://www.codeproject.com/Articles/8295/MPEG-Audio-Frame-Header
+* MPEG Audio Frame Header (mp3 format) https://www.datavoyage.com/mpgscript/mpeghdr.htm
+
+MP3 (VBR and CBR) files may have their first frame with some metadata, called Xing/VBRI/Info/LAME header. As the frame is only about 26 ms long, `podtime` doesn't care about detecting and excluding it from the audio frames list. The header may contain the number of frames in the file and if the file is CBR, then it's a very fast way to calculate its duration, however there is only one way to verify the accuracy of the data: to go through the frames one by one, which is what `podtime` does. More information about the header frames:
+
+* Mp3 Info Tag revision 1 Specifications http://gabriel.mp3-tech.org/mp3infotag.html
+* http://www.multiweb.cz/twoinches/MP3inside.htm#VBR
+
+Many (but not all) podcasts have ID3 tags, so `podtime` knows to skip those:
+
+* ID3 v1 http://www.multiweb.cz/twoinches/MP3inside.htm#Tag1
+* ID3 v2.2 https://mutagen-specs.readthedocs.io/en/latest/id3/id3v2.2.html
+* ID3 v2.3 https://github.com/id3/ID3v2.3/blob/master/id3v2.3.0.txt
+* ID3 v2.4 https://github.com/id3/ID3v2.4/blob/master/id3v2.4.0-frames.txt
+
+=== Tests
+
+There are unit tests (property-based with https://hackage.haskell.org/package/QuickCheck[`QuickCheck`] and example-based) and integration tests for the MP3 parser.
+
+The integration test goes through `mp3` files in `~/gPodder/Downloads/` and for each of them: parses it with the internal parser and with `sox` and verifies that the durations match with the max error of `0.1` seconds. This error is enough for my purposes; decreasing it to `0.01` seconds causes failures: they must be because the parser doesn't skip the Xing/Info/VBRI/LAME header frame, which is typically 0.026 s long. If there are 200 new podcast episodes, the max error will be 20 seconds; assuming a (very) average duration of 45 minutes/episode, the total time is 150 hours, of which the 20 seconds is mere 0.004%! This integration test showed 588/588 successful examples in my case.
+
+Run the tests with:
+
+* `stack test podtime:test:unit-test` for unit tests;
+* `stack test podtime:test:integration-test` for integration tests; they will fail if you don't have the gPodder database and `sox`.
+
+There are some commands in the link:Makefile[`Makefile`] useful for development.
+
+== PoC
+
+A quick and dirty link:podtime.sh[proof of concept] was implemented in shell with `sqlite3` and `sox`. It was fast, but the output wasn't entirely correct, see the reason below.
+
+==== How to get MP3 duration in shell
+
+There are many ways to get the information, for example with https://unix.stackexchange.com/questions/480375/how-to-find-accumulated-duration-on-several-mp3-with-command-line[`ffprobe`] or https://stackoverflow.com/questions/8933053/check-duration-of-audio-files-on-the-command-line/46493743#46493743[`sox`]:
+
+----
+$ time ffprobe -hide_banner -v warning -select_streams a:0 -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 "$FILE"
+[mp3 @ 0x7fbde1104b40] Estimating duration from bitrate, this may be inaccurate
+13924.910062
+ffprobe -hide_banner -v warning -select_streams a:0 -show_entries  -of    0.05s user 0.02s system 94% cpu 0.068 total
+
+$ time sox --info -D "$FILE"
+sox WARN mp3-util: MAD lost sync
+13956.955011
+sox --info -D "$FILE"  0.00s user 0.00s system 77% cpu 0.010 total
+----
+
+These are very fast because they read information headers (if present) and estimate the duration based on file size. However this doesn't work accurately for VBR files w/o headers; the warnings in the commands above indicate this. These commands produce the accurate duration:
+
+----
+$ time ffmpeg -v quiet -stats -i "$FILE" -f null - 2>&1 | sed -nE 's/.*time=([^ ]+).*/\1/p'
+04:57:57.86
+ffmpeg -v quiet -stats -i "$FILE" -f null - 2>&1  19.81s user 0.12s system 99% cpu 19.989 total
+sed -nE 's/.*time=([^ ]+).*/\1/p'  0.00s user 0.00s system 0% cpu 19.989 total
+
+$ time sox --ignore-length "$FILE" -n stat 2>&1 | awk '/Length \(seconds\):/{ print $3 }'
+17877.812245
+sox --ignore-length "$FILE" -n stat 2>&1  37.45s user 0.11s system 99% cpu 37.592 total
+awk '/Length \(seconds\):/{ print $3 }'  0.00s user 0.00s system 0% cpu 37.591 total
+----
+
+According to https://trac.ffmpeg.org/wiki/FFprobeTips#Getdurationbydecoding, you have to use `ffmpeg` to get an accurate duration since `ffprobe` always uses header data. Note that `ffmpeg` prints the duration in the `HH:MM:SS.ss` format and I couldn't find a way to change that, so parsing would need to convert that into seconds.
+
+For comparison:
+
+----
+$ time podtime "$FILE"
+17877.83836765611
+podtime "$FILE"  0.63s user 0.54s system 103% cpu 1.138 total
+----
+
+It's substantially faster! This file is `222798800` bytes (212 MiB) long.

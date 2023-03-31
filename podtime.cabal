@@ -1,6 +1,6 @@
 cabal-version:       3.0
 name:                podtime
-version:             0.5.1
+version:             0.6.0
 synopsis:            A tool that prints the total time of the new podcasts in a gPodder database.
 homepage:            https://github.com/eunikolsky/podtime#readme
 license:             BSD-3-Clause
@@ -71,7 +71,8 @@ executable podtime
   hs-source-dirs:      program
   main-is:             Main.hs
   other-modules:
-      CacheItemCSV
+      Action
+    , CacheItemCSV
     , FileDurationCacheM
     , GPodderDatabase
     , NoDurationCacheM
@@ -91,6 +92,7 @@ executable podtime
     , directory
     , filepath
     , mtl
+    , optparse-applicative
     , raw-strings-qq
     , sqlite-simple
     , text
