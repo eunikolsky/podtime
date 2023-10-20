@@ -2,11 +2,12 @@ module PureParserDurationM
   ( runPureParserDuration
   ) where
 
-import Conduit ((.|), MonadIO, MonadThrow, MonadTrans, MonadUnliftIO, lift, runConduitRes, sourceFile)
+import Conduit ((.|), MonadIO, MonadThrow, MonadTrans, MonadUnliftIO, lift, runConduitRes, sourceFile, throwM)
 import Control.Monad.Identity (IdentityT(runIdentityT))
-import Data.Conduit.Attoparsec (sinkParser)
+import Data.Conduit.Attoparsec (ParseError(..), sinkParserEither)
+import DurationParseError (DurationParseError(..))
 import GetDuration (MonadDuration(..), MonadModTime(..))
-import MP3 (mp3Parser)
+import MP3 (AudioDuration, mp3Parser)
 
 -- | Implements the `MonadDuration` interface by using the `mp3Parser`.
 --
@@ -22,7 +23,17 @@ runPureParserDuration :: PureParserDurationM m a -> m a
 runPureParserDuration (PureParserDurationM a) = runIdentityT a
 
 instance (MonadUnliftIO m, MonadThrow m) => MonadDuration (PureParserDurationM m) where
-  calculateDuration file = runConduitRes $ sourceFile file .| sinkParser mp3Parser
+  calculateDuration file = addFilenameToParseError file . runConduitRes $ sourceFile file .| sinkParserEither mp3Parser
+
+-- | Adds the filename to the parse error (if it happens) and rethrows the
+-- extended `DurationParseError`. It will still terminate the program, but
+-- it will print the filename with the parse error.
+addFilenameToParseError :: MonadThrow m => FilePath -> m (Either ParseError AudioDuration) -> m AudioDuration
+addFilenameToParseError file me = do
+  e <- me
+  case e of
+    Left err -> throwM $ DurationParseError file err
+    Right d -> pure d
 
 instance MonadModTime m => MonadModTime (PureParserDurationM m) where
   getModTime = lift . getModTime
