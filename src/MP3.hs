@@ -172,7 +172,7 @@ frameHeaderParser = do
   samplingRate <- samplingRateParser mpegVersion byte2
 
   let paddingSize = if testBit byte2 paddingBitIndex then 1 else 0
-      contentsSize = frameSize bitrate samplingRate - frameHeaderSize + paddingSize
+      contentsSize = frameSize mpegVersion bitrate samplingRate - frameHeaderSize + paddingSize
 
   pure (FrameInfo{ fiMPEGVersion = mpegVersion, fiSamplingRate = samplingRate }, contentsSize)
 
@@ -295,10 +295,17 @@ bitrateParser mpeg byte = case (mpeg, shiftR byte 4) of
   (_, 0b1111) -> fail "Unexpected bitrate \"bad\" (15)"
   (_, x) -> fail $ "Impossible bitrate value " <> show x
 
--- | Returns the frame length based on the provided bitrate and sample rate.
-frameSize :: Bitrate -> SamplingRate -> Int
-frameSize br sr = floor @Float $ 144 * bitrateBitsPerSecond br / samplingRateHz sr
+-- | Returns the frame length based on the provided MPEG version, bitrate and
+-- sample rate.
+-- Note: most MP3 docs don't mention this, but the formula to calculate the
+-- frame size is slightly different for MPEG2 vs MPEG1 Layer 3. See also:
+-- https://stackoverflow.com/questions/62536328/mpeg-2-and-2-5-problems-calculating-frame-sizes-in-bytes/62539671#62539671
+frameSize :: MPEGVersion -> Bitrate -> SamplingRate -> Int
+frameSize mpeg br sr = floor @Float $ coeff mpeg * bitrateBitsPerSecond br / samplingRateHz sr
   where
+    coeff MPEG1 = 144
+    coeff MPEG2 = 72
+
     bitrateBitsPerSecond BR8kbps   = 8000
     bitrateBitsPerSecond BR16kbps  = 16000
     bitrateBitsPerSecond BR24kbps  = 24000
