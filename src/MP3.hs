@@ -26,7 +26,10 @@ instance Show AudioDuration where
   show (AudioDuration d) = show d <> " s"
 
 -- | Information about one MP3 frame, necessary to calculate its duration.
-newtype FrameInfo = FrameInfo { fiSamplingRate :: SamplingRate }
+data FrameInfo = FrameInfo
+  { fiMPEGVersion :: !MPEGVersion
+  , fiSamplingRate :: !SamplingRate
+  }
   deriving stock Show
 
 -- | Parses an MP3 (MPEG1/MPEG2 Layer III) file and returns the audio duration.
@@ -121,8 +124,11 @@ newtype SkippedBytesCount = SkippedBytesCount Int
   deriving newtype (Num, Eq, Ord)
 
 frameDuration :: FrameInfo -> AudioDuration
-frameDuration = AudioDuration . (samplesPerFrame /) . samplingRateHz . fiSamplingRate
-  where samplesPerFrame = 1152
+frameDuration FrameInfo{fiMPEGVersion,fiSamplingRate} =
+  AudioDuration . (samplesPerFrame fiMPEGVersion /) $ samplingRateHz fiSamplingRate
+  where
+    samplesPerFrame MPEG1 = 1152
+    samplesPerFrame MPEG2 = 576
 
 -- | Expects an end-of-input. If it fails [1], there is a failure message
 -- containing the current position and next 4 bytes — this helps with parser
@@ -168,7 +174,7 @@ frameHeaderParser = do
   let paddingSize = if testBit byte2 paddingBitIndex then 1 else 0
       contentsSize = frameSize bitrate samplingRate - frameHeaderSize + paddingSize
 
-  pure (FrameInfo { fiSamplingRate = samplingRate }, contentsSize)
+  pure (FrameInfo{ fiMPEGVersion = mpegVersion, fiSamplingRate = samplingRate }, contentsSize)
 
 -- | Parses a single MP3 frame.
 frameParser :: Parser FrameInfo
@@ -188,6 +194,7 @@ frameSyncValidator (b0, b1) =
 
 -- | MPEG version of a given MP3 frame.
 data MPEGVersion = MPEG1 | MPEG2
+  deriving stock Show
 
 -- | Parses MPEG Version 1 or 2 from the header byte.
 parseMPEGVersion :: Word8 -> Parser MPEGVersion

@@ -164,9 +164,9 @@ spec = parallel $ do
         . forAll (genFrame $ MP3FrameSettings (MPEG1FrameSettings (BRValid VBV128) sr) NoPadding) $ \frame ->
           frame ~> mp3Parser `parsesDuration` duration
 
-    forM_ [ (MPEG2.SR16000, 0.072)
-          , (MPEG2.SR22050, 0.052244897)
-          , (MPEG2.SR24000, 0.048)
+    forM_ [ (MPEG2.SR16000, 0.036)
+          , (MPEG2.SR22050, 0.026122448)
+          , (MPEG2.SR24000, 0.024)
           ] $ \(sr, duration) ->
       prop ("calculates the duration of one MPEG2 " <> show sr <> " frame")
         . forAll (genFrame $ MP3FrameSettings (MPEG2FrameSettings (MPEG2.BRValid MPEG2.VBV128) sr) NoPadding) $ \frame ->
