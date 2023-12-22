@@ -126,9 +126,10 @@ newtype SkippedBytesCount = SkippedBytesCount Int
 frameDuration :: FrameInfo -> AudioDuration
 frameDuration FrameInfo{fiMPEGVersion,fiSamplingRate} =
   AudioDuration . (samplesPerFrame fiMPEGVersion /) $ samplingRateHz fiSamplingRate
-  where
-    samplesPerFrame MPEG1 = 1152
-    samplesPerFrame MPEG2 = 576
+
+samplesPerFrame :: Num a => MPEGVersion -> a
+samplesPerFrame MPEG1 = 1152
+samplesPerFrame MPEG2 = 576
 
 -- | Expects an end-of-input. If it fails [1], there is a failure message
 -- containing the current position and next 4 bytes — this helps with parser
@@ -301,11 +302,8 @@ bitrateParser mpeg byte = case (mpeg, shiftR byte 4) of
 -- frame size is slightly different for MPEG2 vs MPEG1 Layer 3. See also:
 -- https://stackoverflow.com/questions/62536328/mpeg-2-and-2-5-problems-calculating-frame-sizes-in-bytes/62539671#62539671
 frameSize :: MPEGVersion -> Bitrate -> SamplingRate -> Int
-frameSize mpeg br sr = floor @Float $ coeff mpeg * bitrateBitsPerSecond br / samplingRateHz sr
+frameSize mpeg br sr = floor @Float $ samplesPerFrame mpeg / 8 * bitrateBitsPerSecond br / samplingRateHz sr
   where
-    coeff MPEG1 = 144
-    coeff MPEG2 = 72
-
     bitrateBitsPerSecond BR8kbps   = 8000
     bitrateBitsPerSecond BR16kbps  = 16000
     bitrateBitsPerSecond BR24kbps  = 24000
