@@ -36,7 +36,7 @@ spec (Episodes baseDir mp3s) =
         contents <- B.readFile $ baseDir </> mp3
         mp3Parser `shouldSucceedOn` contents
 
-      fit ("parsed duration matches sox's duration: " <> ushow mp3) $ do
+      parallel . fit ("parsed duration matches sox's duration: " <> ushow mp3) $ do
         let filepath = baseDir </> mp3
         contents <- B.readFile filepath
         externalDuration <- getExternalAudioDuration filepath
