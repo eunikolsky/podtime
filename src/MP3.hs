@@ -25,6 +25,10 @@ newtype AudioDuration = AudioDuration { getAudioDuration :: Double }
 instance Show AudioDuration where
   show (AudioDuration d) = show d <> " s"
 
+-- | Information about one MP3 frame, necessary to calculate its duration.
+newtype FrameInfo = FrameInfo { fiSamplingRate :: SamplingRate }
+  deriving stock Show
+
 -- | Parses an MP3 (MPEG1/MPEG2 Layer III) file and returns the audio duration.
 -- An accepted MP3 file:
 --
@@ -94,12 +98,12 @@ retryingAfterOneByte p = p <|> (A.anyWord8 >> p)
 -- (for MP3 stream dumps that don't start with a frame). If the parser has
 -- skipped more than 1440 bytes (the max MP3 frame size) and hasn't found a
 -- valid frame header, this is an invalid MP3 stream.
-parseFirstFrames :: Parser [SamplingRate]
+parseFirstFrames :: Parser [FrameInfo]
 parseFirstFrames = (singleton <$> frameParser) <|> findFirstFrames (SkippedBytesCount 1)
   where
     maxFrameSize = 1440
 
-    findFirstFrames :: SkippedBytesCount -> Parser [SamplingRate]
+    findFirstFrames :: SkippedBytesCount -> Parser [FrameInfo]
     findFirstFrames skippedCount
       | skippedCount >= maxFrameSize = fail "Couldn't find a valid MP3 frame after skipping leading junk"
       | otherwise = do
@@ -116,8 +120,8 @@ parseFirstFrames = (singleton <$> frameParser) <|> findFirstFrames (SkippedBytes
 newtype SkippedBytesCount = SkippedBytesCount Int
   deriving newtype (Num, Eq, Ord)
 
-frameDuration :: SamplingRate -> AudioDuration
-frameDuration = AudioDuration . (samplesPerFrame /) . samplingRateHz
+frameDuration :: FrameInfo -> AudioDuration
+frameDuration = AudioDuration . (samplesPerFrame /) . samplingRateHz . fiSamplingRate
   where samplesPerFrame = 1152
 
 -- | Expects an end-of-input. If it fails [1], there is a failure message
@@ -147,9 +151,9 @@ endOfInput = do
 skipPostID3Padding :: Parser ()
 skipPostID3Padding = A.skip (== 0x20) <|> A.skipWhile (== 0)
 
--- | Parses the header of an MP3 frame and returns its sampling rate and the
+-- | Parses the header of an MP3 frame and returns its `FrameInfo` and the
 -- number of bytes to read for this frame.
-frameHeaderParser :: Parser (SamplingRate, Int)
+frameHeaderParser :: Parser (FrameInfo, Int)
 frameHeaderParser = do
   let frameHeaderSize = 4
   [byte0, byte1, byte2, _] <- A.count frameHeaderSize A.anyWord8 <?> "Incomplete frame header"
@@ -164,10 +168,10 @@ frameHeaderParser = do
   let paddingSize = if testBit byte2 paddingBitIndex then 1 else 0
       contentsSize = frameSize bitrate samplingRate - frameHeaderSize + paddingSize
 
-  pure (samplingRate, contentsSize)
+  pure (FrameInfo { fiSamplingRate = samplingRate }, contentsSize)
 
--- | Parses a single MP3 frame and returns its sampling rate.
-frameParser :: Parser SamplingRate
+-- | Parses a single MP3 frame.
+frameParser :: Parser FrameInfo
 frameParser = do
   (samplingRate, contentsSize) <- frameHeaderParser
   _ <- A.take contentsSize
