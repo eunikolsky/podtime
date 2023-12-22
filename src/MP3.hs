@@ -25,6 +25,13 @@ newtype AudioDuration = AudioDuration { getAudioDuration :: Double }
 instance Show AudioDuration where
   show (AudioDuration d) = show d <> " s"
 
+-- | Information about one MP3 frame, necessary to calculate its duration.
+data FrameInfo = FrameInfo
+  { fiMPEGVersion :: !MPEGVersion
+  , fiSamplingRate :: !SamplingRate
+  }
+  deriving stock Show
+
 -- | Parses an MP3 (MPEG1/MPEG2 Layer III) file and returns the audio duration.
 -- An accepted MP3 file:
 --
@@ -94,12 +101,12 @@ retryingAfterOneByte p = p <|> (A.anyWord8 >> p)
 -- (for MP3 stream dumps that don't start with a frame). If the parser has
 -- skipped more than 1440 bytes (the max MP3 frame size) and hasn't found a
 -- valid frame header, this is an invalid MP3 stream.
-parseFirstFrames :: Parser [SamplingRate]
+parseFirstFrames :: Parser [FrameInfo]
 parseFirstFrames = (singleton <$> frameParser) <|> findFirstFrames (SkippedBytesCount 1)
   where
     maxFrameSize = 1440
 
-    findFirstFrames :: SkippedBytesCount -> Parser [SamplingRate]
+    findFirstFrames :: SkippedBytesCount -> Parser [FrameInfo]
     findFirstFrames skippedCount
       | skippedCount >= maxFrameSize = fail "Couldn't find a valid MP3 frame after skipping leading junk"
       | otherwise = do
@@ -116,9 +123,13 @@ parseFirstFrames = (singleton <$> frameParser) <|> findFirstFrames (SkippedBytes
 newtype SkippedBytesCount = SkippedBytesCount Int
   deriving newtype (Num, Eq, Ord)
 
-frameDuration :: SamplingRate -> AudioDuration
-frameDuration = AudioDuration . (samplesPerFrame /) . samplingRateHz
-  where samplesPerFrame = 1152
+frameDuration :: FrameInfo -> AudioDuration
+frameDuration FrameInfo{fiMPEGVersion,fiSamplingRate} =
+  AudioDuration . (samplesPerFrame fiMPEGVersion /) $ samplingRateHz fiSamplingRate
+
+samplesPerFrame :: Num a => MPEGVersion -> a
+samplesPerFrame MPEG1 = 1152
+samplesPerFrame MPEG2 = 576
 
 -- | Expects an end-of-input. If it fails [1], there is a failure message
 -- containing the current position and next 4 bytes — this helps with parser
@@ -147,9 +158,9 @@ endOfInput = do
 skipPostID3Padding :: Parser ()
 skipPostID3Padding = A.skip (== 0x20) <|> A.skipWhile (== 0)
 
--- | Parses the header of an MP3 frame and returns its sampling rate and the
+-- | Parses the header of an MP3 frame and returns its `FrameInfo` and the
 -- number of bytes to read for this frame.
-frameHeaderParser :: Parser (SamplingRate, Int)
+frameHeaderParser :: Parser (FrameInfo, Int)
 frameHeaderParser = do
   let frameHeaderSize = 4
   [byte0, byte1, byte2, _] <- A.count frameHeaderSize A.anyWord8 <?> "Incomplete frame header"
@@ -162,12 +173,12 @@ frameHeaderParser = do
   samplingRate <- samplingRateParser mpegVersion byte2
 
   let paddingSize = if testBit byte2 paddingBitIndex then 1 else 0
-      contentsSize = frameSize bitrate samplingRate - frameHeaderSize + paddingSize
+      contentsSize = frameSize mpegVersion bitrate samplingRate - frameHeaderSize + paddingSize
 
-  pure (samplingRate, contentsSize)
+  pure (FrameInfo{ fiMPEGVersion = mpegVersion, fiSamplingRate = samplingRate }, contentsSize)
 
--- | Parses a single MP3 frame and returns its sampling rate.
-frameParser :: Parser SamplingRate
+-- | Parses a single MP3 frame.
+frameParser :: Parser FrameInfo
 frameParser = do
   (samplingRate, contentsSize) <- frameHeaderParser
   _ <- A.take contentsSize
@@ -184,6 +195,7 @@ frameSyncValidator (b0, b1) =
 
 -- | MPEG version of a given MP3 frame.
 data MPEGVersion = MPEG1 | MPEG2
+  deriving stock Show
 
 -- | Parses MPEG Version 1 or 2 from the header byte.
 parseMPEGVersion :: Word8 -> Parser MPEGVersion
@@ -284,9 +296,13 @@ bitrateParser mpeg byte = case (mpeg, shiftR byte 4) of
   (_, 0b1111) -> fail "Unexpected bitrate \"bad\" (15)"
   (_, x) -> fail $ "Impossible bitrate value " <> show x
 
--- | Returns the frame length based on the provided bitrate and sample rate.
-frameSize :: Bitrate -> SamplingRate -> Int
-frameSize br sr = floor @Float $ 144 * bitrateBitsPerSecond br / samplingRateHz sr
+-- | Returns the frame length based on the provided MPEG version, bitrate and
+-- sample rate.
+-- Note: most MP3 docs don't mention this, but the formula to calculate the
+-- frame size is slightly different for MPEG2 vs MPEG1 Layer 3. See also:
+-- https://stackoverflow.com/questions/62536328/mpeg-2-and-2-5-problems-calculating-frame-sizes-in-bytes/62539671#62539671
+frameSize :: MPEGVersion -> Bitrate -> SamplingRate -> Int
+frameSize mpeg br sr = floor @Float $ samplesPerFrame mpeg / 8 * bitrateBitsPerSecond br / samplingRateHz sr
   where
     bitrateBitsPerSecond BR8kbps   = 8000
     bitrateBitsPerSecond BR16kbps  = 16000

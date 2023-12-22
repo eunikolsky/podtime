@@ -3,12 +3,13 @@ module IntegrationSpec (main) where
 import Control.Exception
 import Control.Monad
 import Data.ByteString qualified as B
-import Data.List (find)
+import Data.List (find, isInfixOf)
 import Data.Maybe
 import MP3
 import Numeric
 import SuccessFormatter
 import System.Directory
+import System.Environment
 import System.Exit
 import System.FilePath
 import System.Process
@@ -20,7 +21,8 @@ import Text.Show.Unicode
 
 main :: IO ()
 main = do
-  episodes <- findEpisodes
+  maybeDir <- lookupEnv "TEST_DIR"
+  episodes <- findEpisodes maybeDir
 
   let config = defaultConfig
         { configPrintSlowItems = Just 5
@@ -36,7 +38,7 @@ spec (Episodes baseDir mp3s) =
         contents <- B.readFile $ baseDir </> mp3
         mp3Parser `shouldSucceedOn` contents
 
-      fit ("parsed duration matches sox's duration: " <> ushow mp3) $ do
+      parallel . fit ("parsed duration matches sox's duration: " <> ushow mp3) $ do
         let filepath = baseDir </> mp3
         contents <- B.readFile filepath
         externalDuration <- getExternalAudioDuration filepath
@@ -91,10 +93,13 @@ data Episodes = Episodes
   FilePath -- ^ base directory
   [FilePath] -- ^ episodes
 
-findEpisodes :: IO Episodes
-findEpisodes = do
+findEpisodes :: Maybe FilePath -> IO Episodes
+findEpisodes maybeDir = do
   baseDir <- gPodderDownloadsDir
-  episodeDirs <- filterM doesDirectoryExist =<< ls baseDir
+  let maybeFilterByName = case maybeDir of
+        Just dir -> fmap (filter (dir `isInfixOf`))
+        Nothing -> id
+  episodeDirs <- maybeFilterByName . filterM doesDirectoryExist =<< ls baseDir
   files <- join <$> forM episodeDirs ls
   let mp3s = filter ((== ".mp3") . takeExtension) files
   pure . Episodes baseDir $ makeRelative baseDir <$> mp3s
