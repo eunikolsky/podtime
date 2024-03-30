@@ -102,12 +102,12 @@ Many (but not all) podcasts have ID3 tags, so `podtime` knows to skip those:
 
 There are unit tests (property-based with https://hackage.haskell.org/package/QuickCheck[`QuickCheck`] and example-based) and integration tests for the MP3 parser.
 
-The integration test goes through `mp3` files in `~/gPodder/Downloads/` and for each of them: parses it with the internal parser and with `sox` and verifies that the durations match with the max error of `0.1` seconds. This error is enough for my purposes; decreasing it to `0.01` seconds causes failures: they must be because the parser doesn't skip the Xing/Info/VBRI/LAME header frame, which is typically 0.026 s long. If there are 200 new podcast episodes, the max error will be 20 seconds; assuming a (very) average duration of 45 minutes/episode, the total time is 150 hours, of which the 20 seconds is mere 0.004%! This integration test showed 588/588 successful examples in my case.
+The integration test goes through `mp3` files in `~/gPodder/Downloads/` and for each of them: parses it with the internal parser and with `sox` (in very rare cases, `sox` doesn't produce the correct duration, so the test also checks `ffmpeg`'s output) and verifies that the durations match with the max error of `0.11` seconds. This error is enough for my purposes; decreasing it to `0.01` seconds causes failures: they must be because the parser doesn't skip the Xing/Info/VBRI/LAME header frame, which is typically 0.026 s long. If there are 200 new podcast episodes, the max error will be 20 seconds; assuming a (very) average duration of 45 minutes/episode, the total time is 150 hours, of which the 20 seconds is mere 0.004%! This integration test showed 588/588 successful examples in my case.
 
 Run the tests with:
 
 * `stack test podtime:test:unit-test` for unit tests;
-* `stack test podtime:test:integration-test` for integration tests; they will fail if you don't have the gPodder database and `sox`.
+* `stack test podtime:test:integration-test` for integration tests; they will fail if you don't have the gPodder database and `sox` (and `ffmpeg`).
 
 There are some commands in the link:Makefile[`Makefile`] useful for development.
 
