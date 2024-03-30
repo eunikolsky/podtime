@@ -5,7 +5,7 @@ import Control.Monad
 import Data.Attoparsec.Text
 import Data.ByteString qualified as B
 import Data.Foldable
-import Data.List (isInfixOf)
+import Data.List (isInfixOf, sort)
 import Data.Maybe
 import Data.Text qualified as T
 import MP3
@@ -152,7 +152,7 @@ findEpisodes maybeFile maybeDir = do
                 Just dir -> fmap (filter (dir `isInfixOf`))
                 Nothing -> id
           episodeDirs <- maybeFilterByName . filterM doesDirectoryExist =<< ls baseDir
-          files <- join <$> forM episodeDirs ls
+          files <- join <$> forM (sort episodeDirs) ls
           pure $ filter ((== ".mp3") . takeExtension) files
   pure . Episodes baseDir $ makeRelative baseDir <$> mp3s
 
