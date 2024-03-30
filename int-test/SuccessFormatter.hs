@@ -2,7 +2,7 @@ module SuccessFormatter
   ( successFormatter
   ) where
 
-import Test.Hspec.Core.Formatters.V1
+import Test.Hspec.Api.Formatters.V1
 import Text.Printf
 
 -- TODO this uses v1 formatters, which is deprecated
