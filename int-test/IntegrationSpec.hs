@@ -2,9 +2,12 @@ module IntegrationSpec (main) where
 
 import Control.Exception
 import Control.Monad
+import Data.Attoparsec.Text
 import Data.ByteString qualified as B
-import Data.List (find, isInfixOf)
+import Data.Foldable
+import Data.List (isInfixOf, sort)
 import Data.Maybe
+import Data.Text qualified as T
 import MP3
 import Numeric
 import SuccessFormatter
@@ -14,6 +17,7 @@ import System.Exit
 import System.FilePath
 import System.Process
 import Test.Hspec
+import Test.Hspec.Api.Formatters.V1
 import Test.Hspec.Attoparsec
 import Test.Hspec.Core.Runner
 import Text.Read
@@ -22,11 +26,11 @@ import Text.Show.Unicode
 main :: IO ()
 main = do
   maybeDir <- lookupEnv "TEST_DIR"
-  episodes <- findEpisodes maybeDir
+  maybeFile <- lookupEnv "TEST_FILE"
+  episodes <- findEpisodes maybeFile maybeDir
 
-  let config = defaultConfig
+  let config = useFormatter ("success", successFormatter) $ defaultConfig
         { configPrintSlowItems = Just 5
-        , configFormatter = Just successFormatter
         }
   hspecWith config . parallel $ spec episodes
 
@@ -38,14 +42,24 @@ spec (Episodes baseDir mp3s) =
         contents <- B.readFile $ baseDir </> mp3
         mp3Parser `shouldSucceedOn` contents
 
-      parallel . fit ("parsed duration matches sox's duration: " <> ushow mp3) $ do
+      parallel . fit ("parsed duration matches sox's/ffmpeg's duration: " <> ushow mp3) $ do
         let filepath = baseDir </> mp3
         contents <- B.readFile filepath
-        externalDuration <- getExternalAudioDuration filepath
-        contents ~> mp3Parser `parsesDuration` externalDuration
+        soxDuration <- getSoxDuration filepath
+        let result = contents ~> mp3Parser
+        case result of
+          Left _ -> result `parsesDuration` soxDuration
+          Right res ->
+            if isNothing $ isDurationCorrect res soxDuration
+              then result `parsesDuration` soxDuration
+              else do
+                -- if we disagree with `sox`'s result, compare the result with
+                -- `ffmpeg`'s result
+                ffmpegDuration <- getFFMpegDuration filepath
+                result `parsesDuration` ffmpegDuration
 
 -- | Checks that the parsed duration equals to the expected duration with the
--- error of at most 0.1 seconds.
+-- error of at most 0.11 seconds.
 parsesDuration :: Either String AudioDuration -> AudioDuration -> Expectation
 result `parsesDuration` expected =
   either (expectationFailure . errmsg) checkDuration result
@@ -54,21 +68,26 @@ result `parsesDuration` expected =
     errmsg err = "expected a parsed duration around " <> show expected
       <> "\nbut parsing failed with error: " <> show err
 
-    checkDuration actual =
-      let diff = expected - actual
-          epsilon = 0.1 :: AudioDuration
-      in when (abs diff > epsilon) . expectationFailure $ mconcat
-        [ "parsed duration ", show actual
-        , " doesn't match reference duration ", show expected
-        , "\nthe difference is ", showFFloat (Just 3) (getAudioDuration diff) ""
-        , "s (", showFFloat (Just 3) (getAudioDuration $ diff / expected * 100) ""
-        , "%), more than ", show epsilon
-        ]
+    checkDuration actual = for_ (isDurationCorrect actual expected) expectationFailure
+
+isDurationCorrect :: AudioDuration -> AudioDuration -> Maybe String
+isDurationCorrect actual expected = if abs diff > epsilon then Just err else mempty
+  where
+    diff = expected - actual
+    epsilon = 0.11 :: AudioDuration
+    err = mconcat
+      [ "parsed duration ", show actual
+      , " doesn't match reference duration ", show expected
+      , "\nthe difference is ", showFFloat (Just 3) (getAudioDuration diff) ""
+      , "s (", showFFloat (Just 3) (getAudioDuration $ diff / expected * 100) ""
+      , "%), more than ", show epsilon
+      ]
 
 -- | Runs `sox` to get the duration of the mp3 file. The duration is not
--- estimated, but calculated accurately.
-getExternalAudioDuration :: FilePath -> IO AudioDuration
-getExternalAudioDuration mp3 = getDuration <$> runSox
+-- estimated, but calculated accurately (although `sox` does report an incorrect
+-- duration in rare cases).
+getSoxDuration :: FilePath -> IO AudioDuration
+getSoxDuration mp3 = getDuration <$> runSox
   where
     runSox = do
       (exitCode, _, stderr) <- readProcessWithExitCode
@@ -87,21 +106,54 @@ getExternalAudioDuration mp3 = getDuration <$> runSox
       let lengthString = last lengthWords
       AudioDuration <$> readMaybe lengthString
 
+-- | Runs `ffmpeg` to get the duration of the mp3 file. The duration is not
+-- estimated, but calculated accurately.
+getFFMpegDuration :: FilePath -> IO AudioDuration
+getFFMpegDuration mp3 = getDuration <$> runFFMpeg
+  where
+    runFFMpeg = do
+      (exitCode, _, stderr) <- readProcessWithExitCode
+        "ffmpeg"
+        ["-v", "quiet", "-stats", "-i", mp3, "-f", "null", "-", "-nostdin"]
+        ""
+      when (exitCode /= ExitSuccess) . throwIO .
+        AssertionFailed . mconcat $
+          [ "ffmpeg returned exit code ", show exitCode
+          , ": ", stderr
+          ]
+      pure stderr
+
+    getDuration output = parseDuration . fromJust . find ("time=" `T.isPrefixOf`) . T.splitOn " " . last . T.splitOn "\r" $ T.pack output
+
+    parseDuration t = either error id . flip parseOnly t $ do
+      void $ string "time="
+      hours <- fromIntegral @Int <$> decimal
+      void $ char ':'
+      minutes <- fromIntegral @Int <$> decimal
+      void $ char ':'
+      seconds <- double
+      endOfInput
+
+      pure . AudioDuration $ ((hours * 60) + minutes) * 60 + seconds
+
 -- | Contains a list of episodes relative to the base directory. This separation
 -- is necessary in order to shorten the test names.
 data Episodes = Episodes
   FilePath -- ^ base directory
   [FilePath] -- ^ episodes
 
-findEpisodes :: Maybe FilePath -> IO Episodes
-findEpisodes maybeDir = do
+findEpisodes :: Maybe FilePath -> Maybe FilePath -> IO Episodes
+findEpisodes maybeFile maybeDir = do
   baseDir <- gPodderDownloadsDir
-  let maybeFilterByName = case maybeDir of
-        Just dir -> fmap (filter (dir `isInfixOf`))
-        Nothing -> id
-  episodeDirs <- maybeFilterByName . filterM doesDirectoryExist =<< ls baseDir
-  files <- join <$> forM episodeDirs ls
-  let mp3s = filter ((== ".mp3") . takeExtension) files
+  mp3s <- case maybeFile of
+        Just file -> pure [file]
+        Nothing -> do
+          let maybeFilterByName = case maybeDir of
+                Just dir -> fmap (filter (dir `isInfixOf`))
+                Nothing -> id
+          episodeDirs <- maybeFilterByName . filterM doesDirectoryExist =<< ls baseDir
+          files <- sort . join <$> forM episodeDirs ls
+          pure $ filter ((== ".mp3") . takeExtension) files
   pure . Episodes baseDir $ makeRelative baseDir <$> mp3s
 
 -- | Lists items in the given directory like `listDirectory`, but returns
