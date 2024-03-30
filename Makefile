@@ -38,6 +38,8 @@ testd-match:
 
 # can be used like this to limit to a particular podcast directory:
 # `TEST_DIR=Psychologist m int-testd`
+# or one file in a podcast directory:
+# `TEST_FILE=podcast/episode.mp3 m int-testd`
 .PHONY:
 int-testd:
 	@ghcid --command "stack ghci --test --main-is $(INTEGRATION_TEST_TARGET) --ghci-options=-fobject-code" --test ":main --fail-fast --rerun --rerun-all-on-success --failure-report=int-testd.report"

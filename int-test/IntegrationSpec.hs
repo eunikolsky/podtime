@@ -23,7 +23,8 @@ import Text.Show.Unicode
 main :: IO ()
 main = do
   maybeDir <- lookupEnv "TEST_DIR"
-  episodes <- findEpisodes maybeDir
+  maybeFile <- lookupEnv "TEST_FILE"
+  episodes <- findEpisodes maybeFile maybeDir
 
   let config = useFormatter ("success", successFormatter) $ defaultConfig
         { configPrintSlowItems = Just 5
@@ -93,15 +94,18 @@ data Episodes = Episodes
   FilePath -- ^ base directory
   [FilePath] -- ^ episodes
 
-findEpisodes :: Maybe FilePath -> IO Episodes
-findEpisodes maybeDir = do
+findEpisodes :: Maybe FilePath -> Maybe FilePath -> IO Episodes
+findEpisodes maybeFile maybeDir = do
   baseDir <- gPodderDownloadsDir
-  let maybeFilterByName = case maybeDir of
-        Just dir -> fmap (filter (dir `isInfixOf`))
-        Nothing -> id
-  episodeDirs <- maybeFilterByName . filterM doesDirectoryExist =<< ls baseDir
-  files <- join <$> forM episodeDirs ls
-  let mp3s = filter ((== ".mp3") . takeExtension) files
+  mp3s <- case maybeFile of
+        Just file -> pure [file]
+        Nothing -> do
+          let maybeFilterByName = case maybeDir of
+                Just dir -> fmap (filter (dir `isInfixOf`))
+                Nothing -> id
+          episodeDirs <- maybeFilterByName . filterM doesDirectoryExist =<< ls baseDir
+          files <- join <$> forM episodeDirs ls
+          pure $ filter ((== ".mp3") . takeExtension) files
   pure . Episodes baseDir $ makeRelative baseDir <$> mp3s
 
 -- | Lists items in the given directory like `listDirectory`, but returns
