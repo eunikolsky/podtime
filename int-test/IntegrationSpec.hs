@@ -152,7 +152,7 @@ findEpisodes maybeFile maybeDir = do
                 Just dir -> fmap (filter (dir `isInfixOf`))
                 Nothing -> id
           episodeDirs <- maybeFilterByName . filterM doesDirectoryExist =<< ls baseDir
-          files <- join <$> forM (sort episodeDirs) ls
+          files <- sort . join <$> forM episodeDirs ls
           pure $ filter ((== ".mp3") . takeExtension) files
   pure . Episodes baseDir $ makeRelative baseDir <$> mp3s
 
