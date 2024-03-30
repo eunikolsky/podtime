@@ -70,4 +70,4 @@ buildfw:
 
 .PHONY:
 int-test-parallel:
-	@stack build --no-run-tests $(INTEGRATION_TEST_TARGET) && stack test $(INTEGRATION_TEST_TARGET)
+	@stack build --no-run-tests $(INTEGRATION_TEST_TARGET) && nice stack test $(INTEGRATION_TEST_TARGET)
