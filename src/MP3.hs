@@ -43,6 +43,8 @@ data FrameInfo = FrameInfo
 -- - consists of 1+ MP3 frames, where a frame may be followed by an optional
 -- extra byte;
 --
+-- - contains up to 2100 null bytes;
+--
 -- - optionally ends with:
 --   - an ID3 v1 tag;
 --   - or a piece of the next frame [0][2].
@@ -78,6 +80,10 @@ mp3Parser = do
 
   firstSamplingRates <- parseFirstFrames
   samplingRates <- A.many' $ retryingAfterOneByte frameParser
+
+  -- skips up to 2100 null bytes before ID3 v1 because a "Psychologist"
+  -- episode has 2091 null bytes there
+  void $ skipUpTo (== 0) 2100
 
   ID3V1.id3Parser <|>
     -- if we're here, all the sequential valid MP3 frames have been parsed and

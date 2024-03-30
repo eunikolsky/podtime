@@ -192,11 +192,11 @@ spec = parallel $ do
       prop "contains next 4 bytes" $ \(ValidMP3Frame frame) arbJunk ->
         BS.length arbJunk >= 4 ==> do
           let dump = show . foldMap' BSB.word8HexFixed . BS.unpack $ BS.take 4 arbJunk
-          (frame <> arbJunk) ~> mp3Parser `shouldFailWithErrorContaining` dump
+          (frame <> allowedEndZeros <> arbJunk) ~> mp3Parser `shouldFailWithErrorContaining` dump
 
       prop "contains next 1–3 bytes" $ \(ValidMP3Frame frame) (ShortJunk arbJunk) -> do
         let dump = show . foldMap' BSB.word8HexFixed . BS.unpack $ arbJunk
-        (frame <> arbJunk) ~> mp3Parser `shouldFailWithErrorContaining` dump
+        (frame <> allowedEndZeros <> arbJunk) ~> mp3Parser `shouldFailWithErrorContaining` dump
 
     describe "ID3 support" $ do
       prop "skips ID3 v2 tag before all frames" $ \frames ->
@@ -226,6 +226,9 @@ spec = parallel $ do
         let tag = mkID3Tag $ defaultID3TagSettings { idsVersion = "\x05\x00" }
         tag ~> mp3Parser `shouldFailWithErrorContaining` "Unsupported ID3 version"
 
+allowedEndZeros :: ByteString
+allowedEndZeros = BS.replicate 2100 0
+
 -- | Checks that the parsed duration equals to the expected duration with the
 -- precision of `1e-5`.
 parsesDuration :: Either String AudioDuration -> AudioDuration -> Expectation
@@ -249,7 +252,7 @@ validMP3FramesBytes :: ValidMP3Frames -> ByteString
 validMP3FramesBytes (ValidMP3Frames (NonEmpty frames)) = mconcat $ validMP3FrameBytes <$> frames
 
 -- | Generates a list of frames with some junk between a pair of frames. The
--- junk contains at least two bytes.
+-- junk contains at least two + 2100 bytes.
 data FramesWithMiddleJunk = FramesWithMiddleJunk ByteString ByteString ByteString
   deriving stock (Show)
 
@@ -258,12 +261,12 @@ instance Arbitrary FramesWithMiddleJunk where
     framesBefore <- validMP3FramesBytes <$> arbitrary
     framesAfter <- validMP3FramesBytes <$> arbitrary
     junk <- (:) <$> arbitrary <*> listOf1 arbitrary
-    pure . FramesWithMiddleJunk framesBefore framesAfter $ BS.pack junk
+    pure . FramesWithMiddleJunk framesBefore framesAfter $ allowedEndZeros <> BS.pack junk
 
   shrink (FramesWithMiddleJunk beforeFrames afterFrames junk) = do
     size <- shrink $ BS.length junk
     guard $ size > 1
-    pure . FramesWithMiddleJunk beforeFrames afterFrames $ BS.take size junk
+    pure . FramesWithMiddleJunk beforeFrames afterFrames $ allowedEndZeros <> BS.take size junk
 
 -- | A wrapper for `MP3FrameSettings` that only prints its `SamplingRate` in `show`
 -- (because only that value is relevant to frame duration).
