@@ -3,7 +3,8 @@ module IntegrationSpec (main) where
 import Control.Exception
 import Control.Monad
 import Data.ByteString qualified as B
-import Data.List (find, isInfixOf)
+import Data.Foldable
+import Data.List (isInfixOf)
 import Data.Maybe
 import MP3
 import Numeric
@@ -55,16 +56,20 @@ result `parsesDuration` expected =
     errmsg err = "expected a parsed duration around " <> show expected
       <> "\nbut parsing failed with error: " <> show err
 
-    checkDuration actual =
-      let diff = expected - actual
-          epsilon = 0.1 :: AudioDuration
-      in when (abs diff > epsilon) . expectationFailure $ mconcat
-        [ "parsed duration ", show actual
-        , " doesn't match reference duration ", show expected
-        , "\nthe difference is ", showFFloat (Just 3) (getAudioDuration diff) ""
-        , "s (", showFFloat (Just 3) (getAudioDuration $ diff / expected * 100) ""
-        , "%), more than ", show epsilon
-        ]
+    checkDuration actual = for_ (isDurationCorrect actual expected) expectationFailure
+
+isDurationCorrect :: AudioDuration -> AudioDuration -> Maybe String
+isDurationCorrect actual expected = if abs diff > epsilon then Just err else mempty
+  where
+    diff = expected - actual
+    epsilon = 0.1 :: AudioDuration
+    err = mconcat
+      [ "parsed duration ", show actual
+      , " doesn't match reference duration ", show expected
+      , "\nthe difference is ", showFFloat (Just 3) (getAudioDuration diff) ""
+      , "s (", showFFloat (Just 3) (getAudioDuration $ diff / expected * 100) ""
+      , "%), more than ", show epsilon
+      ]
 
 -- | Runs `sox` to get the duration of the mp3 file. The duration is not
 -- estimated, but calculated accurately.
