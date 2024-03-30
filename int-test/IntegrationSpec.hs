@@ -14,6 +14,7 @@ import System.Exit
 import System.FilePath
 import System.Process
 import Test.Hspec
+import Test.Hspec.Api.Formatters.V1
 import Test.Hspec.Attoparsec
 import Test.Hspec.Core.Runner
 import Text.Read
@@ -24,9 +25,8 @@ main = do
   maybeDir <- lookupEnv "TEST_DIR"
   episodes <- findEpisodes maybeDir
 
-  let config = defaultConfig
+  let config = useFormatter ("success", successFormatter) $ defaultConfig
         { configPrintSlowItems = Just 5
-        , configFormatter = Just successFormatter
         }
   hspecWith config . parallel $ spec episodes
 
