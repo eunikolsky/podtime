@@ -71,3 +71,7 @@ buildfw:
 .PHONY:
 int-test-parallel:
 	@stack build --no-run-tests $(INTEGRATION_TEST_TARGET) && nice stack test $(INTEGRATION_TEST_TARGET)
+
+.PHONY:
+watch-int-test-parallel:
+	@watch -n2 sh -c "lsof -c sox -c ffmpeg | rg -F ~/gPodder/Downloads"
