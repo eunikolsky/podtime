@@ -1,12 +1,12 @@
 module GetDurationSpec (spec) where
 
+import AudioDuration
 import Control.Monad.Reader
 import Control.Monad.State.Strict
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
 import Data.Time.Clock
 import GetDuration
-import MP3
 import Test.Hspec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck

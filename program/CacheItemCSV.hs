@@ -4,12 +4,12 @@ module CacheItemCSV
   , toKeyValue
   ) where
 
+import AudioDuration (AudioDuration(..))
 import Data.Csv (FromField(..), FromRecord, ToField(..), ToRecord)
 import Data.Text qualified as T (pack, unpack)
 import Data.Text.Encoding qualified as TE (decodeUtf8, encodeUtf8)
 import GHC.Generics (Generic)
 import GetDuration (ModTime)
-import MP3 (AudioDuration(..))
 import OrphanInstances ()
 
 -- | Cache items persisted to CSV file.

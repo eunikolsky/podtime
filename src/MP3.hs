@@ -1,10 +1,10 @@
 module MP3
-  ( AudioDuration(..)
-  , frameParser
+  ( frameParser
   , mp3Parser
   ) where
 
 import AttoparsecExtra
+import AudioDuration
 import Control.Applicative
 import Control.Monad
 import Data.Attoparsec.ByteString ((<?>), Parser)
@@ -17,13 +17,6 @@ import Data.Word
 import ID3 qualified as ID3V2
 import ID3V1 qualified
 import Text.Printf
-
--- | Duration of an MP3 file, in seconds.
-newtype AudioDuration = AudioDuration { getAudioDuration :: Double }
-  deriving newtype (Eq, Ord, Fractional, Num)
-
-instance Show AudioDuration where
-  show (AudioDuration d) = show d <> " s"
 
 -- | Information about one MP3 frame, necessary to calculate its duration.
 data FrameInfo = FrameInfo

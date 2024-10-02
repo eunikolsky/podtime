@@ -2,11 +2,11 @@ module Lib
   ( formatDuration
   ) where
 
+import AudioDuration (AudioDuration(getAudioDuration))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Time.Clock (DiffTime, picosecondsToDiffTime)
 import Data.Time.Format (defaultTimeLocale, formatTime)
-import MP3 (AudioDuration(getAudioDuration))
 
 -- | Converts the floating-point @duration@ to @DiffTime@.
 -- The standard function in @Data.Time.Clock@ takes an @Integer@.

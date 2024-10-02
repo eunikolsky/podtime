@@ -2,12 +2,13 @@ module PureParserDurationM
   ( runPureParserDuration
   ) where
 
+import AudioDuration (AudioDuration)
 import Conduit ((.|), MonadIO, MonadThrow, MonadTrans, MonadUnliftIO, lift, runConduitRes, sourceFile, throwM)
 import Control.Monad.Identity (IdentityT(runIdentityT))
 import Data.Conduit.Attoparsec (ParseError(..), sinkParserEither)
 import DurationParseError (DurationParseError(..))
 import GetDuration (MonadDuration(..), MonadModTime(..))
-import MP3 (AudioDuration, mp3Parser)
+import MP3 (mp3Parser)
 
 -- | Implements the `MonadDuration` interface by using the `mp3Parser`.
 --

@@ -1,6 +1,7 @@
 module MP3Spec (spec) where
 
 import AnySizedTag
+import AudioDuration
 import Control.Monad
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS

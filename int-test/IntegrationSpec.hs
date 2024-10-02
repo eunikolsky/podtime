@@ -1,5 +1,6 @@
 module IntegrationSpec (main) where
 
+import AudioDuration
 import Control.Exception
 import Control.Monad
 import Data.Attoparsec.Text

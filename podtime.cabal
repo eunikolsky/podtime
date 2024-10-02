@@ -53,6 +53,7 @@ library
   hs-source-dirs:      src
   exposed-modules:
       AttoparsecExtra
+    , AudioDuration
     , ConduitExtra
     , GetDuration
     , ID3

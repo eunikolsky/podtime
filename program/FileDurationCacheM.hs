@@ -2,6 +2,7 @@ module FileDurationCacheM
   ( withFileDurationCache
   ) where
 
+import AudioDuration (AudioDuration)
 import CacheItemCSV (CacheItemCSV(..), fromKeyValue, toKeyValue)
 import Conduit (MonadIO, MonadThrow, MonadTrans, MonadUnliftIO, lift, liftIO)
 import Control.Exception (Exception)
@@ -14,7 +15,6 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M (empty, insert, lookup, toList)
 import Data.Monoid (Any(..))
 import GetDuration (ModTime, MonadDuration(..), MonadDurationCache(..), MonadModTime(..))
-import MP3 (AudioDuration)
 import UnliftIO.Directory (doesFileExist)
 import UnliftIO.Exception (bracket, throwIO)
 import UnliftIO.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
