@@ -13,15 +13,13 @@ import Data.Word
 -- duration is read from the `mvhd` box inside the `moov` box; everything
 -- else is ignored.
 m4aParser :: Parser AudioDuration
-m4aParser = iterRoot
-  where
-    iterRoot = findBox "moov" iterMoov
-    iterMoov = findBox "mvhd" $ do
-      void $ A.take 12
-      timeScale <- anyWord32be
-      duration <- anyWord32be
-      pure . AudioDuration $ 1 / (fromIntegral timeScale) * fromIntegral duration
+m4aParser = findBox "moov" . findBox "mvhd" $ do
+  void $ A.take 12
+  timeScale <- anyWord32be
+  duration <- anyWord32be
+  pure . AudioDuration $ 1 / fromIntegral timeScale * fromIntegral duration
 
+  where
     findBox btype parse = do
       box <- boxParser
       if boxType box == btype
