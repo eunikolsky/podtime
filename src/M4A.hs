@@ -15,23 +15,20 @@ import Data.Word
 m4aParser :: Parser AudioDuration
 m4aParser = iterRoot
   where
-    iterRoot = do
+    iterRoot = findBox "moov" iterMoov
+    iterMoov = findBox "mvhd" $ do
+      void $ A.take 12
+      timeScale <- anyWord32be
+      duration <- anyWord32be
+      pure . AudioDuration $ 1 / (fromIntegral timeScale) * fromIntegral duration
+
+    findBox btype parse = do
       box <- boxParser
-      if boxType box == "moov"
-        then iterMoov
+      if boxType box == btype
+        then parse
         -- this looks like an infinite loop, but the parser will fail with
         -- "not enough input" if we don't find a `moov` box
-        else skipContent box *> iterRoot
-
-    iterMoov = do
-      moovBox <- boxParser
-      if boxType moovBox == "mvhd"
-        then do
-          void $ A.take 12
-          timeScale <- anyWord32be
-          duration <- anyWord32be
-          pure . AudioDuration $ 1 / (fromIntegral timeScale) * fromIntegral duration
-        else skipContent moovBox *> iterMoov
+        else skipContent box *> findBox btype parse
 
 -- We don't parse the content here because we need to either skip it or parse the boxes
 -- inside, in which case the parser should stay at the beginning of the content.
