@@ -59,6 +59,7 @@ library
     , ID3
     , ID3V1
     , Lib
+    , M4A
     , MP3
   build-depends:
       attoparsec
@@ -109,7 +110,7 @@ test-suite unit-test
   hs-source-dirs:      test
   main-is:             Spec.hs
   other-modules:
-      MP3Spec
+      M4ASpec, MP3Spec
     , ID3Spec, ID3V1Spec
     , ConduitExtraSpec
     , GetDurationSpec
