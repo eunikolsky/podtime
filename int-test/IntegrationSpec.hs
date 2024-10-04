@@ -6,9 +6,10 @@ import Control.Monad
 import Data.Attoparsec.Text
 import Data.ByteString qualified as B
 import Data.Foldable
-import Data.List (isInfixOf, sort)
+import Data.List (isInfixOf, partition, sort)
 import Data.Maybe
 import Data.Text qualified as T
+import M4A
 import MP3
 import Numeric
 import SuccessFormatter
@@ -29,14 +30,17 @@ main = do
   maybeDir <- lookupEnv "TEST_DIR"
   maybeFile <- lookupEnv "TEST_FILE"
   episodes <- findEpisodes maybeFile maybeDir
+  let (mp3Episodes, m4aEpisodes) = separateEpisodes episodes
 
   let config = useFormatter ("success", successFormatter) $ defaultConfig
         { configPrintSlowItems = Just 5
         }
-  hspecWith config . parallel $ spec episodes
+  hspecWith config . parallel $ do
+    mp3Spec mp3Episodes
+    m4aSpec m4aEpisodes
 
-spec :: Episodes -> Spec
-spec (Episodes baseDir mp3s) =
+mp3Spec :: Episodes -> Spec
+mp3Spec (Episodes baseDir mp3s) =
   describe "mp3Parser" $ do
     forM_ mp3s $ \mp3 -> do
       it ("parses " <> ushow mp3) $ do
@@ -58,6 +62,20 @@ spec (Episodes baseDir mp3s) =
                 -- `ffmpeg`'s result
                 ffmpegDuration <- getFFMpegDuration filepath
                 result `parsesDuration` ffmpegDuration
+
+m4aSpec :: Episodes -> Spec
+m4aSpec (Episodes baseDir m4as) =
+  describe "m4aParser" $ do
+    forM_ m4as $ \m4a -> do
+      it ("parses " <> ushow m4a) $ do
+        contents <- B.readFile $ baseDir </> m4a
+        m4aParser `shouldSucceedOn` contents
+
+      parallel . fit ("parsed duration matches ffmpeg's duration: " <> ushow m4a) $ do
+        let filepath = baseDir </> m4a
+        contents <- B.readFile filepath
+        ffmpegDuration <- getFFMpegDuration filepath
+        contents ~> m4aParser `parsesDuration` ffmpegDuration
 
 -- | Checks that the parsed duration equals to the expected duration with the
 -- error of at most 0.11 seconds.
@@ -107,15 +125,15 @@ getSoxDuration mp3 = getDuration <$> runSox
       let lengthString = last lengthWords
       AudioDuration <$> readMaybe lengthString
 
--- | Runs `ffmpeg` to get the duration of the mp3 file. The duration is not
+-- | Runs `ffmpeg` to get the duration of the mp3/m4a file. The duration is not
 -- estimated, but calculated accurately.
 getFFMpegDuration :: FilePath -> IO AudioDuration
-getFFMpegDuration mp3 = getDuration <$> runFFMpeg
+getFFMpegDuration audio = getDuration <$> runFFMpeg
   where
     runFFMpeg = do
       (exitCode, _, stderr) <- readProcessWithExitCode
         "ffmpeg"
-        ["-v", "quiet", "-stats", "-i", mp3, "-f", "null", "-", "-nostdin"]
+        ["-v", "quiet", "-stats", "-i", audio, "-f", "null", "-", "-nostdin"]
         ""
       when (exitCode /= ExitSuccess) . throwIO .
         AssertionFailed . mconcat $
@@ -146,7 +164,7 @@ data Episodes = Episodes
 findEpisodes :: Maybe FilePath -> Maybe FilePath -> IO Episodes
 findEpisodes maybeFile maybeDir = do
   baseDir <- gPodderDownloadsDir
-  mp3s <- case maybeFile of
+  episodes <- case maybeFile of
         Just file -> pure [file]
         Nothing -> do
           let maybeFilterByName = case maybeDir of
@@ -154,8 +172,14 @@ findEpisodes maybeFile maybeDir = do
                 Nothing -> id
           episodeDirs <- maybeFilterByName . filterM doesDirectoryExist =<< ls baseDir
           files <- sort . join <$> forM episodeDirs ls
-          pure $ filter ((== ".mp3") . takeExtension) files
-  pure . Episodes baseDir $ makeRelative baseDir <$> mp3s
+          pure $ filter (isSupportedExtension . takeExtension) files
+  pure . Episodes baseDir $ makeRelative baseDir <$> episodes
+
+  where isSupportedExtension ext = (ext == ".mp3") || (ext == ".m4a")
+
+separateEpisodes :: Episodes -> (Episodes, Episodes)
+separateEpisodes (Episodes baseDir episodes) = (Episodes baseDir mp3s, Episodes baseDir m4as)
+  where (mp3s, m4as) = partition (\ep -> takeExtension ep == ".mp3") episodes
 
 -- | Lists items in the given directory like `listDirectory`, but returns
 -- full paths.
