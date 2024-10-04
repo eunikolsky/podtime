@@ -4,13 +4,15 @@ module PureParserDurationM
 
 import AudioDuration (AudioDuration)
 import Conduit ((.|), MonadIO, MonadThrow, MonadTrans, MonadUnliftIO, lift, runConduitRes, sourceFile, throwM)
+import Control.Applicative (Alternative((<|>)))
 import Control.Monad.Identity (IdentityT(runIdentityT))
 import Data.Conduit.Attoparsec (ParseError(..), sinkParserEither)
 import DurationParseError (DurationParseError(..))
 import GetDuration (MonadDuration(..), MonadModTime(..))
+import M4A (m4aParser)
 import MP3 (mp3Parser)
 
--- | Implements the `MonadDuration` interface by using the `mp3Parser`.
+-- | Implements the `MonadDuration` interface by using the `mp3Parser` and `m4aParser`.
 --
 -- Note: the `IdentityT` is only necessary to implement the `MonadTrans` class
 -- to allow to `lift` the `getModTime` into this monad.
@@ -24,7 +26,8 @@ runPureParserDuration :: PureParserDurationM m a -> m a
 runPureParserDuration (PureParserDurationM a) = runIdentityT a
 
 instance (MonadUnliftIO m, MonadThrow m) => MonadDuration (PureParserDurationM m) where
-  calculateDuration file = addFilenameToParseError file . runConduitRes $ sourceFile file .| sinkParserEither mp3Parser
+  calculateDuration file = addFilenameToParseError file . runConduitRes $ sourceFile file .| sinkParserEither audioParser
+    where audioParser = mp3Parser <|> m4aParser
 
 -- | Adds the filename to the parse error (if it happens) and rethrows the
 -- extended `DurationParseError`. It will still terminate the program, but
