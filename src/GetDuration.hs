@@ -6,8 +6,8 @@ module GetDuration
   , getDuration
   ) where
 
+import AudioDuration
 import Data.Time.Clock
-import MP3
 
 -- | Provides a function to calculate duration of an MP3 file. Throws an
 -- exception if parsing failed.

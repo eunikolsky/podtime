@@ -2,12 +2,12 @@
 
 module OrphanInstances () where
 
+import AudioDuration (AudioDuration(..))
 import Control.Monad.IO.Class (liftIO)
 import Data.Csv (FromField(..), ToField(..))
 import Data.Text qualified as T (pack, unpack)
 import Data.Text.Encoding qualified as TE (decodeUtf8, encodeUtf8)
 import GetDuration (MonadModTime(..))
-import MP3 (AudioDuration(..))
 import System.Directory (getModificationTime)
 
 -- | Orphan instance to load `AudioDuration` from CSV as its `Double` value.

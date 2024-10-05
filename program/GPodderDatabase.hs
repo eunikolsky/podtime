@@ -27,7 +27,7 @@ getPodcasts = do
   return $ fromOnly <$> ids
 
 -- | Returns the filenames of all not-listened-to episodes of the @podcast@ by
--- its id. Only @.mp3@ files are returned. The filenames are relative to
+-- its id. Only @.mp3@ and @.m4a@ files are returned. The filenames are relative to
 -- gPodder's download directory (they look like `podcast/episode.mp3`).
 getNewEpisodes :: Int -> DB [FilePath]
 getNewEpisodes podcast = do
@@ -42,7 +42,7 @@ getNewEpisodes podcast = do
         AND e.published >= (
           SELECT MIN(published) FROM episode WHERE podcast_id = :podcast AND state = 1 AND is_new
         )
-        AND e.download_filename LIKE '%.mp3'
+        AND (e.download_filename LIKE '%.mp3' OR e.download_filename LIKE '%.m4a')
     |]
     [":podcast" := podcast]
   pure $ fromOnly <$> results

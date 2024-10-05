@@ -5,6 +5,7 @@ module Stat
   , recordStat
   ) where
 
+import AudioDuration (AudioDuration)
 import Conduit ((.|), decodeUtf8C, encodeUtf8C, linesUnboundedC, runConduitRes, sourceFile, stdoutC, unlinesC)
 import ConduitExtra (takeLastC)
 import Data.Text (Text)
@@ -14,7 +15,6 @@ import Data.Time (LocalTime, NominalDiffTime, defaultTimeLocale, formatTime, get
 import Data.Version (Version, showVersion)
 import Data.Word (Word8, Word16)
 import Lib (formatDuration)
-import MP3 (AudioDuration)
 import Paths_podtime qualified as Paths (version)
 import XDGDir (XDGDir(XDGData), getXDGPath)
 

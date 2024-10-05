@@ -1,6 +1,6 @@
 cabal-version:       3.0
 name:                podtime
-version:             0.6.3
+version:             0.7.0
 synopsis:            A tool that prints the total time of the new podcasts in a gPodder database.
 homepage:            https://github.com/eunikolsky/podtime#readme
 license:             BSD-3-Clause
@@ -53,11 +53,13 @@ library
   hs-source-dirs:      src
   exposed-modules:
       AttoparsecExtra
+    , AudioDuration
     , ConduitExtra
     , GetDuration
     , ID3
     , ID3V1
     , Lib
+    , M4A
     , MP3
   build-depends:
       attoparsec
@@ -108,7 +110,7 @@ test-suite unit-test
   hs-source-dirs:      test
   main-is:             Spec.hs
   other-modules:
-      MP3Spec
+      M4ASpec, MP3Spec
     , ID3Spec, ID3V1Spec
     , ConduitExtraSpec
     , GetDurationSpec
